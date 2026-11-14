@@ -22,6 +22,7 @@ import {
   DEFAULT_PLANS,
 } from './mock-data';
 import { generateCardCode, getCardUrl, slugify } from '../utils';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 const CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1d95b73eb2852';
 
@@ -34,6 +35,14 @@ class TapCardDatabase {
   private orders: Order[] = [...INITIAL_ORDERS];
   private plans: AppPlan[] = [...DEFAULT_PLANS];
   private lastSynced: number = 0;
+
+  private getSupabase() {
+    try {
+      return createAdminClient();
+    } catch {
+      return null;
+    }
+  }
 
   private async pullCloud(): Promise<void> {
     try {
@@ -147,6 +156,13 @@ class TapCardDatabase {
   // PROFILES
   // -------------------------------------------------------------
   async getProfileById(id: string): Promise<Profile | null> {
+    const supabase = this.getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+        if (!error && data) return data as Profile;
+      } catch {}
+    }
     let prof = this.profiles.find((p) => p.id === id);
     if (!prof) {
       await this.pullCloud();
@@ -156,6 +172,13 @@ class TapCardDatabase {
   }
 
   async getProfileByUserId(userId: string): Promise<Profile | null> {
+    const supabase = this.getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).single();
+        if (!error && data) return data as Profile;
+      } catch {}
+    }
     let prof = this.profiles.find((p) => p.user_id === userId);
     if (!prof) {
       await this.pullCloud();
@@ -166,6 +189,13 @@ class TapCardDatabase {
 
   async getProfileBySlug(slug: string): Promise<Profile | null> {
     const cleanSlug = slug.toLowerCase().trim();
+    const supabase = this.getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('profiles').select('*').ilike('slug', cleanSlug).single();
+        if (!error && data) return data as Profile;
+      } catch {}
+    }
     let prof = this.profiles.find((p) => p.slug.toLowerCase() === cleanSlug);
     if (!prof) {
       await this.pullCloud();
@@ -225,13 +255,6 @@ class TapCardDatabase {
       updated_at: new Date().toISOString(),
     };
 
-    const existingIndex = this.profiles.findIndex((p) => p.user_id === data.user_id);
-    if (existingIndex !== -1) {
-      this.profiles[existingIndex] = newProfile;
-    } else {
-      this.profiles.push(newProfile);
-    }
-
     // Automatically generate and link an active NFC TapCard card for this profile
     const cardCode = generateCardCode();
     const newCard: Card = {
@@ -248,6 +271,29 @@ class TapCardDatabase {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
+    const supabase = this.getSupabase();
+    if (supabase) {
+      try {
+        const { data: dbProfile, error } = await supabase.from('profiles').insert(newProfile).select().single();
+        if (!error && dbProfile) {
+          await supabase.from('cards').insert(newCard);
+          this.profiles.push(dbProfile as Profile);
+          this.cards.push(newCard);
+          return dbProfile as Profile;
+        }
+      } catch (err) {
+        console.warn('Supabase profile create fallback:', err);
+      }
+    }
+
+    const existingIndex = this.profiles.findIndex((p) => p.user_id === data.user_id);
+    if (existingIndex !== -1) {
+      this.profiles[existingIndex] = newProfile;
+    } else {
+      this.profiles.push(newProfile);
+    }
+
     this.cards.push(newCard);
 
     this.pushCloud().catch(() => {});
@@ -255,6 +301,23 @@ class TapCardDatabase {
   }
 
   async updateProfile(id: string, updates: Partial<Profile>): Promise<Profile | null> {
+    const supabase = this.getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('id', id)
+          .select()
+          .single();
+        if (!error && data) {
+          const idx = this.profiles.findIndex((p) => p.id === id);
+          if (idx !== -1) this.profiles[idx] = data as Profile;
+          return data as Profile;
+        }
+      } catch {}
+    }
+
     await this.pullCloud();
     const index = this.profiles.findIndex((p) => p.id === id);
     if (index === -1) return null;
@@ -279,8 +342,46 @@ class TapCardDatabase {
     card: Card | null;
     errorReason?: 'CARD_NOT_FOUND' | 'CARD_INACTIVE' | 'CARD_REPLACED' | 'CARD_UNASSIGNED' | 'PROFILE_INACTIVE';
   }> {
-    await this.pullCloud();
     const cleanId = decodeURIComponent(identifier).trim();
+    const supabase = this.getSupabase();
+    if (supabase) {
+      try {
+        // 1. Try card lookup in Supabase
+        const { data: card } = await supabase
+          .from('cards')
+          .select('*')
+          .ilike('card_code', cleanId)
+          .single();
+        if (card) {
+          if (card.status === 'REPLACED') return { profile: null, card, errorReason: 'CARD_REPLACED' };
+          if (card.status === 'SUSPENDED' || card.status === 'DISABLED' || card.status === 'LOST') return { profile: null, card, errorReason: 'CARD_INACTIVE' };
+          if (card.status === 'AVAILABLE' || !card.profile_id) return { profile: null, card, errorReason: 'CARD_UNASSIGNED' };
+          const { data: prof } = await supabase.from('profiles').select('*').eq('id', card.profile_id).single();
+          if (!prof || prof.status === 'DISABLED') return { profile: null, card, errorReason: 'PROFILE_INACTIVE' };
+          return { profile: prof, card };
+        }
+
+        // 2. Try profile slug lookup in Supabase
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('*')
+          .ilike('slug', cleanId)
+          .single();
+        if (prof) {
+          if (prof.status === 'DISABLED') return { profile: null, card: null, errorReason: 'PROFILE_INACTIVE' };
+          const { data: assignedCard } = await supabase
+            .from('cards')
+            .select('*')
+            .eq('profile_id', prof.id)
+            .eq('status', 'ACTIVE')
+            .limit(1)
+            .single();
+          return { profile: prof, card: assignedCard || null };
+        }
+      } catch {}
+    }
+
+    await this.pullCloud();
 
     // 1. First check if it matches a card code (case-insensitive)
     const card = this.cards.find(
