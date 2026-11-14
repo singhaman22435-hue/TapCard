@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ImageUpload } from '@/components/ui/ImageUpload';
 import { slugify } from '@/lib/utils';
 import {
   User,
@@ -240,14 +241,12 @@ export default function OnboardingPage() {
                 onChange={(e) => setFormData({ ...formData, website: e.target.value })}
               />
 
-              <Input
-                label="Profile Photo URL"
-                type="url"
-                placeholder="https://..."
-                leftIcon={<Camera className="w-4 h-4 text-slate-400" />}
+              <ImageUpload
+                label="Profile Photo"
                 value={formData.profilePhoto}
-                onChange={(e) => setFormData({ ...formData, profilePhoto: e.target.value })}
-                helperText="Direct image URL for your profile picture"
+                onChange={(url) => setFormData({ ...formData, profilePhoto: url })}
+                shape="circle"
+                helperText="Upload your headshot or avatar from your device or camera"
               />
 
               <div>

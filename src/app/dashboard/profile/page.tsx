@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { ImageUpload } from '@/components/ui/ImageUpload';
 import { ServiceItem } from '@/types/database';
 import {
   User,
@@ -212,28 +213,31 @@ export default function ProfileEditorPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Company / Firm"
-              leftIcon={<Building2 className="w-4 h-4 text-slate-400" />}
-              value={formData.company}
-              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+          <Input
+            label="Company / Firm"
+            leftIcon={<Building2 className="w-4 h-4 text-slate-400" />}
+            value={formData.company}
+            onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-100">
+            <ImageUpload
+              label="Profile Photo"
+              value={formData.profile_photo}
+              onChange={(url) => setFormData({ ...formData, profile_photo: url })}
+              shape="circle"
+              helperText="Square headshot recommended for NFC profile avatar"
             />
 
-            <Input
-              label="Profile Photo URL"
-              leftIcon={<Camera className="w-4 h-4 text-slate-400" />}
-              value={formData.profile_photo}
-              onChange={(e) => setFormData({ ...formData, profile_photo: e.target.value })}
+            <ImageUpload
+              label="Cover Banner Image (Optional)"
+              value={formData.cover_image}
+              onChange={(url) => setFormData({ ...formData, cover_image: url })}
+              shape="rectangle"
+              maxDimension={1200}
+              helperText="Wide banner image shown behind your avatar on the card"
             />
           </div>
-
-          <Input
-            label="Cover Image URL (Optional)"
-            placeholder="https://images.unsplash.com/..."
-            value={formData.cover_image}
-            onChange={(e) => setFormData({ ...formData, cover_image: e.target.value })}
-          />
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
