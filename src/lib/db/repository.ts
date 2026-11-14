@@ -42,22 +42,12 @@ class TapCardDatabase {
 
   async getProfileByUserId(userId: string): Promise<Profile | null> {
     const prof = this.profiles.find((p) => p.user_id === userId);
-    if (prof) return { ...prof };
-    // Primary user fallback if only 1 profile exists
-    if (this.profiles.length > 0) {
-      return { ...this.profiles[0] };
-    }
-    return null;
+    return prof ? { ...prof } : null;
   }
 
   async getProfileBySlug(slug: string): Promise<Profile | null> {
     const cleanSlug = slug.toLowerCase().trim();
-    const prof = this.profiles.find(
-      (p) =>
-        p.slug.toLowerCase() === cleanSlug ||
-        (cleanSlug === 'aman' && p.slug.toLowerCase().includes('aman')) ||
-        (cleanSlug === 'aman-singh' && p.slug.toLowerCase().includes('aman'))
-    );
+    const prof = this.profiles.find((p) => p.slug.toLowerCase() === cleanSlug);
     return prof ? { ...prof } : null;
   }
 

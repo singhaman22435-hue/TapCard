@@ -93,23 +93,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (data.profile) {
           setProfile(data.profile);
+          try {
+            localStorage.setItem('tapcard_user_profile', JSON.stringify(data.profile));
+            document.cookie = `tapcard_profile=${encodeURIComponent(JSON.stringify(data.profile))}; path=/; max-age=31536000; SameSite=Lax`;
+          } catch {}
           return;
         }
       }
 
-      // Fallback: check primary profile slug 'aman'
-      const fallbackRes = await fetch('/api/profile?slug=aman');
-      if (fallbackRes.ok) {
-        const fallbackData = await fallbackRes.json();
-        if (fallbackData.profile) {
-          setProfile(fallbackData.profile);
-          return;
-        }
+      // Check local storage for this user's own profile
+      const localProfile = localStorage.getItem('tapcard_user_profile');
+      if (localProfile) {
+        try {
+          const parsed = JSON.parse(localProfile);
+          if (parsed && (parsed.user_id === userId || !parsed.user_id)) {
+            setProfile(parsed);
+            return;
+          }
+        } catch {}
       }
 
       setProfile(null);
     } catch (err) {
       console.warn('Failed to fetch user profile:', err);
+      const localProfile = localStorage.getItem('tapcard_user_profile');
+      if (localProfile) {
+        try {
+          setProfile(JSON.parse(localProfile));
+        } catch {}
+      }
     }
   }
 
@@ -255,6 +267,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setProfile(null);
     localStorage.removeItem('tapcard_user_session');
+    localStorage.removeItem('tapcard_user_profile');
+    document.cookie = 'tapcard_profile=; path=/; max-age=0';
     router.push('/login');
   }
 
@@ -272,6 +286,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function refreshProfile(): Promise<void> {
     if (user?.id) {
       await fetchProfileForUser(user.id);
+    } else {
+      const localProfile = localStorage.getItem('tapcard_user_profile');
+      if (localProfile) {
+        try {
+          setProfile(JSON.parse(localProfile));
+        } catch {}
+      }
     }
   }
 

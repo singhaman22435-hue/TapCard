@@ -39,7 +39,7 @@ export default function OnboardingPage() {
     whatsapp: '',
     email: user?.email || '',
     website: '',
-    profilePhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+    profilePhoto: '',
     bio: '',
     linkedin: '',
     instagram: '',
@@ -51,6 +51,16 @@ export default function OnboardingPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        fullName: prev.fullName || user.fullName || '',
+        email: prev.email || user.email || '',
+      }));
+    }
+  }, [user]);
 
   const handleNext = () => {
     setError('');
@@ -108,6 +118,13 @@ export default function OnboardingPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Failed to initialize profile.');
+      }
+
+      if (data.profile) {
+        try {
+          localStorage.setItem('tapcard_user_profile', JSON.stringify(data.profile));
+          document.cookie = `tapcard_profile=${encodeURIComponent(JSON.stringify(data.profile))}; path=/; max-age=31536000; SameSite=Lax`;
+        } catch {}
       }
 
       await refreshProfile();

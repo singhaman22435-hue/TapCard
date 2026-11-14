@@ -94,8 +94,14 @@ export default function ProfileEditorPage() {
         services: profile.services || [],
         is_public: profile.is_public ?? true,
       });
+    } else if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        full_name: prev.full_name || user.fullName || '',
+        email: prev.email || user.email || '',
+      }));
     }
-  }, [profile]);
+  }, [profile, user]);
 
   const handleAddService = () => {
     if (!newServiceTitle.trim()) return;
@@ -153,6 +159,13 @@ export default function ProfileEditorPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Failed to save profile changes.');
+      }
+
+      if (data.profile) {
+        try {
+          localStorage.setItem('tapcard_user_profile', JSON.stringify(data.profile));
+          document.cookie = `tapcard_profile=${encodeURIComponent(JSON.stringify(data.profile))}; path=/; max-age=31536000; SameSite=Lax`;
+        } catch {}
       }
 
       await refreshProfile();
