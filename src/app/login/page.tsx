@@ -6,10 +6,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { AlertCircle, Lock, Mail, ArrowRight } from 'lucide-react';
+import { AlertCircle, Lock, Mail } from 'lucide-react';
 
 export default function LoginPage() {
-  const { signIn, setDemoUser } = useAuth();
+  const { signIn } = useAuth();
   const router = useRouter();
 
   const [email, setEmail] = useState('');
@@ -40,15 +40,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleQuickDemo = (asAdmin: boolean = false) => {
-    setDemoUser(asAdmin);
-    if (asAdmin) {
-      router.push('/admin');
-    } else {
-      router.push('/dashboard');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
@@ -66,7 +57,7 @@ export default function LoginPage() {
         <p className="mt-1.5 text-xs text-slate-500">
           Or{' '}
           <Link href="/signup" className="font-semibold text-blue-600 hover:text-blue-700">
-            create a new digital profile for free
+            create a new digital profile
           </Link>
         </p>
       </div>
@@ -86,7 +77,7 @@ export default function LoginPage() {
               type="email"
               required
               placeholder="you@company.com"
-              leftIcon={<Mail className="w-4 h-4" />}
+              leftIcon={<Mail className="w-4 h-4 text-slate-400" />}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -96,7 +87,7 @@ export default function LoginPage() {
               type="password"
               required
               placeholder="••••••••"
-              leftIcon={<Lock className="w-4 h-4" />}
+              leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -116,35 +107,8 @@ export default function LoginPage() {
               Sign In
             </Button>
           </form>
-
-          {/* Quick Development Demo Switchers */}
-          <div className="pt-4 border-t border-slate-100">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5 text-center">
-              Quick Test Access (Pre-Configured)
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo(false)}
-                className="py-2 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <span>Demo User (Aman)</span>
-                <ArrowRight className="w-3 h-3 text-slate-400" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickDemo(true)}
-                className="py-2 px-3 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <span>Admin Portal</span>
-                <ArrowRight className="w-3 h-3 text-slate-400" />
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
   );
 }
-

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { ShieldCheck, User, Sparkles, Check, Lock, Globe } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, profile, refreshProfile, setDemoUser } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [profileStatus, setProfileStatus] = useState(profile?.status || 'ACTIVE');
   const [isUpdating, setIsUpdating] = useState(false);
   const [saved, setSaved] = useState(false);

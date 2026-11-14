@@ -13,7 +13,6 @@ import {
   PhoneCall,
   MessageSquare,
   Sparkles,
-  ExternalLink,
   Mail,
   UserPlus,
 } from 'lucide-react';
@@ -22,7 +21,13 @@ import { repo } from '@/lib/db/repository';
 
 export default async function LandingPage() {
   const plans = await repo.getPlans();
-  const demoProfile = await repo.getProfileBySlug('aman-singh');
+
+  const previewProfile = {
+    full_name: 'Your Name',
+    designation: 'Your Professional Role',
+    company: 'Your Company',
+    bio: 'Connect with me instantly with a tap or scan.',
+  };
 
   const audience = [
     { title: 'Business Owners', desc: 'Exchange contacts at executive meetings without paper clutter.' },
@@ -52,14 +57,6 @@ export default async function LandingPage() {
             <a href="#features" className="hover:text-slate-900 transition-colors">Features</a>
             <a href="#who-is-it-for" className="hover:text-slate-900 transition-colors">Who Is It For</a>
             <a href="#pricing" className="hover:text-slate-900 transition-colors">Pricing</a>
-            <Link
-              href="/c/TC-8F72KX"
-              target="_blank"
-              className="text-blue-600 font-bold hover:text-blue-700 flex items-center gap-1 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100"
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>Live Digital Card</span>
-            </Link>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -102,13 +99,11 @@ export default async function LandingPage() {
 
               <div className="pt-2 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3">
                 <Link
-                  href="/c/TC-8F72KX"
-                  target="_blank"
+                  href="/signup"
                   className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 h-12 rounded-xl text-base font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-all active:scale-[0.99]"
                 >
-                  <Smartphone className="w-4 h-4" />
-                  <span>View Live Digital Card</span>
-                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
+                  <span>Create Digital Profile</span>
+                  <ArrowRight className="w-4 h-4" />
                 </Link>
 
                 <Link
@@ -141,46 +136,37 @@ export default async function LandingPage() {
               {/* Physical Visiting Card */}
               <div className="w-full max-w-xs flex flex-col items-center p-4 bg-slate-50/90 rounded-3xl border border-slate-200 shadow-md space-y-3">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                  1. Physical NFC + QR Card
+                  Physical NFC + QR Card
                 </span>
 
                 <CardPreview
-                  profile={demoProfile || { full_name: 'Aman Singh', designation: 'Full Stack Developer', company: 'Nexus Technologies' }}
-                  cardCode="TC-8F72KX"
+                  profile={previewProfile}
+                  cardCode="TAP-CARD"
                   cardType="matte_black"
                   showToggle={true}
                 />
               </div>
 
               {/* Digital Profile Phone Mockup */}
-              <div className="w-full max-w-[270px] bg-slate-900 p-2.5 rounded-[38px] shadow-2xl border-4 border-slate-800">
+              <div className="w-full max-w-[260px] bg-slate-900 p-2.5 rounded-[38px] shadow-2xl border-4 border-slate-800">
                 <div className="bg-white rounded-[28px] overflow-hidden border border-slate-100 flex flex-col text-center">
                   {/* Phone notch */}
-                  <div className="w-24 h-4 bg-slate-900 rounded-b-xl mx-auto mb-1" />
+                  <div className="w-20 h-3.5 bg-slate-900 rounded-b-xl mx-auto mb-1" />
 
                   {/* Micro Profile Preview */}
                   <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-700 text-white pb-6 relative">
-                    <div className="w-12 h-12 rounded-full border-2 border-white mx-auto overflow-hidden bg-slate-100 mb-1.5">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80"
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="w-12 h-12 rounded-full border-2 border-white mx-auto overflow-hidden bg-slate-100 mb-1.5 flex items-center justify-center font-bold text-slate-800 text-sm">
+                      TC
                     </div>
-                    <p className="text-xs font-bold leading-tight">Aman Singh</p>
-                    <p className="text-[10px] text-blue-100">Full Stack & AI Engineer</p>
+                    <p className="text-xs font-bold leading-tight">Your Digital Profile</p>
+                    <p className="text-[10px] text-blue-100">Professional Identity</p>
                   </div>
 
                   <div className="p-3 space-y-2 -mt-3 bg-white rounded-t-2xl">
-                    <Link
-                      href="/c/TC-8F72KX"
-                      target="_blank"
-                      className="w-full py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm hover:bg-blue-700"
-                    >
+                    <div className="w-full py-1.5 rounded-lg bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center gap-1 shadow-sm">
                       <UserPlus className="w-3 h-3" />
                       <span>Save Contact</span>
-                    </Link>
+                    </div>
 
                     <div className="grid grid-cols-3 gap-1 text-[10px] font-bold">
                       <div className="p-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center">
@@ -195,17 +181,16 @@ export default async function LandingPage() {
                     </div>
 
                     <div className="pt-1 border-t border-slate-100 text-left">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase">Services</p>
-                      <p className="text-[10px] text-slate-700 font-medium">Enterprise Web Systems</p>
-                      <p className="text-[10px] text-slate-700 font-medium">NFC Hardware Smart Cards</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase">Capabilities</p>
+                      <p className="text-[10px] text-slate-700 font-medium">Instant vCard Download</p>
+                      <p className="text-[10px] text-slate-700 font-medium">Inbound Lead Generation</p>
                     </div>
 
                     <Link
-                      href="/c/TC-8F72KX"
-                      target="_blank"
+                      href="/signup"
                       className="block text-[10px] font-bold text-blue-600 underline pt-1"
                     >
-                      Open Full Digital Card &rarr;
+                      Get Started Now &rarr;
                     </Link>
                   </div>
                 </div>
@@ -488,7 +473,7 @@ export default async function LandingPage() {
           <div className="flex items-center gap-6">
             <Link href="/login" className="hover:text-slate-900 transition-colors">Customer Login</Link>
             <Link href="/admin" className="hover:text-slate-900 transition-colors">Admin Portal</Link>
-            <Link href="/c/TC-8F72KX" className="hover:text-slate-900 transition-colors">Live Digital Card</Link>
+            <Link href="/signup" className="hover:text-slate-900 transition-colors">Get Started</Link>
           </div>
         </div>
       </footer>

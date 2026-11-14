@@ -17,7 +17,7 @@ import {
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, signOut, isAdmin, setDemoUser } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
 
   const nav = [
     { name: 'Admin Overview', href: '/admin', icon: ShieldAlert },
@@ -57,11 +57,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
-                    isActive
+                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors ${isActive
                       ? 'bg-blue-600 text-white'
                       : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
+                    }`}
                 >
                   <Icon className="w-4 h-4" />
                   <span>{item.name}</span>

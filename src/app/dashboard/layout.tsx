@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/auth-context';
 import {
   LayoutDashboard,
@@ -18,13 +18,36 @@ import {
   Menu,
   X,
   ShieldAlert,
+  Loader2,
 } from 'lucide-react';
 import { getCardUrl } from '@/lib/utils';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, profile, signOut, isAdmin } = useAuth();
+  const router = useRouter();
+  const { user, profile, signOut, isAdmin, isLoading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push('/login');
+    }
+  }, [isLoading, user, router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+          <span>Verifying session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const publicUrl = profile ? getCardUrl(profile.slug) : null;
 
@@ -210,4 +233,3 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
   );
 }
-

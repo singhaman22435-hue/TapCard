@@ -4,7 +4,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Profile } from '@/types/database';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
-import { DEMO_USER_ID, ADMIN_USER_ID } from '@/lib/db/mock-data';
 
 export interface AuthUser {
   id: string;
@@ -22,7 +21,6 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  setDemoUser: (asAdmin?: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,35 +40,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             const isAdmin = session.user.email?.includes('admin') || false;
-            setUser({
+            const authUser: AuthUser = {
               id: session.user.id,
               email: session.user.email || '',
               fullName: session.user.user_metadata?.full_name || 'User',
               role: isAdmin ? 'admin' : 'user',
-            });
+            };
+            setUser(authUser);
             await fetchProfileForUser(session.user.id);
             setIsLoading(false);
             return;
           }
         }
 
-        // Check local storage for persistent demo/mock session
+        // Check local storage for authenticated session
         const stored = localStorage.getItem('tapcard_user_session');
         if (stored) {
           const parsed = JSON.parse(stored);
           setUser(parsed);
           await fetchProfileForUser(parsed.id);
         } else {
-          // Default to the Demo Aman Singh user for instant testing convenience
-          const defaultUser: AuthUser = {
-            id: DEMO_USER_ID,
-            email: 'aman@nexustech.io',
-            fullName: 'Aman Singh',
-            role: 'user',
-          };
-          setUser(defaultUser);
-          localStorage.setItem('tapcard_user_session', JSON.stringify(defaultUser));
-          await fetchProfileForUser(DEMO_USER_ID);
+          setUser(null);
+          setProfile(null);
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
@@ -89,6 +80,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (data.profile) {
           setProfile(data.profile);
+        } else {
+          setProfile(null);
         }
       }
     } catch (err) {
@@ -117,12 +110,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Local / Offline authentication handling
+      // Standalone authenticated session
       const isAdmin = email.toLowerCase().includes('admin');
       const authUser: AuthUser = {
-        id: isAdmin ? ADMIN_USER_ID : DEMO_USER_ID,
+        id: `usr_${Date.now()}`,
         email,
-        fullName: isAdmin ? 'System Administrator' : 'Aman Singh',
+        fullName: email.split('@')[0],
         role: isAdmin ? 'admin' : 'user',
       };
       setUser(authUser);
@@ -159,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // New user registered locally
+      // New registered user
       const newUserId = `usr_${Date.now()}`;
       const authUser: AuthUser = {
         id: newUserId,
@@ -192,26 +185,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  function setDemoUser(asAdmin: boolean = false) {
-    const authUser: AuthUser = asAdmin
-      ? {
-          id: ADMIN_USER_ID,
-          email: 'admin@tapcard.in',
-          fullName: 'System Administrator',
-          role: 'admin',
-        }
-      : {
-          id: DEMO_USER_ID,
-          email: 'aman@nexustech.io',
-          fullName: 'Aman Singh',
-          role: 'user',
-        };
-
-    setUser(authUser);
-    localStorage.setItem('tapcard_user_session', JSON.stringify(authUser));
-    fetchProfileForUser(authUser.id);
-  }
-
   return (
     <AuthContext.Provider
       value={{
@@ -223,7 +196,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signOut,
         refreshProfile,
-        setDemoUser,
       }}
     >
       {children}
@@ -238,4 +210,3 @@ export function useAuth() {
   }
   return context;
 }
-

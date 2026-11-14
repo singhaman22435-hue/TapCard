@@ -20,7 +20,6 @@ import {
   INITIAL_ANALYTICS,
   INITIAL_ORDERS,
   DEFAULT_PLANS,
-  DEMO_USER_ID,
 } from './mock-data';
 import { generateCardCode, getCardUrl, slugify } from '../utils';
 

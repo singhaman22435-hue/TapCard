@@ -15,11 +15,10 @@ import {
   Copy,
   Check,
   ExternalLink,
-  Phone,
   Sparkles,
   Smartphone,
+  UserPlus,
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
 
 interface AnalyticsSummary {
   totalViews: number;
@@ -73,25 +72,6 @@ export default function DashboardHomePage() {
     loadDashboardData();
   }, [profile?.id]);
 
-  const calculateCompletion = () => {
-    if (!profile) return 0;
-    const fields = [
-      profile.full_name,
-      profile.designation,
-      profile.company,
-      profile.bio,
-      profile.profile_photo,
-      profile.phone,
-      profile.whatsapp,
-      profile.email,
-      profile.website,
-      profile.linkedin,
-    ];
-    const filled = fields.filter(Boolean).length;
-    return Math.round((filled / fields.length) * 100);
-  };
-
-  const completionRate = calculateCompletion();
   const profileUrl = profile ? getCardUrl(profile.slug) : '';
 
   const handleCopyLink = async () => {
@@ -103,24 +83,24 @@ export default function DashboardHomePage() {
 
   return (
     <div className="space-y-8 animate-in fade-in">
-      {/* ---------------- LIVE DIGITAL CARD HERO BANNER ---------------- */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col lg:flex-row items-center justify-between gap-8">
-        <div className="space-y-4 max-w-xl text-center lg:text-left">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold border border-blue-400/30">
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>Active Digital Identity</span>
-          </div>
+      {/* ---------------- PROFILE BANNER / GET STARTED BANNER ---------------- */}
+      {profile ? (
+        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col lg:flex-row items-center justify-between gap-8">
+          <div className="space-y-4 max-w-xl text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-semibold border border-blue-400/30">
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Active Digital Identity</span>
+            </div>
 
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            {profile?.full_name || 'Your Digital Card'}
-          </h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              {profile.full_name}
+            </h1>
 
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Your live profile is accessible by tapping your physical NFC card or scanning the high-contrast QR code below.
-          </p>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Your digital visiting card is live. Share your link, tap with NFC, or scan the QR code to connect.
+            </p>
 
-          <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
-            {profile && (
+            <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-3">
               <Link
                 href={`/c/${profile.slug}`}
                 target="_blank"
@@ -129,49 +109,68 @@ export default function DashboardHomePage() {
                 <span>Open Digital Card</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </Link>
-            )}
 
-            <button
-              onClick={handleCopyLink}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/15 transition-colors"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-emerald-300">URL Copied!</span>
-                </>
-              ) : (
-                <>
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Card Link</span>
-                </>
-              )}
-            </button>
+              <button
+                onClick={handleCopyLink}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/15 transition-colors"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-300">URL Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy Card Link</span>
+                  </>
+                )}
+              </button>
 
-            <Link
-              href="/dashboard/qr"
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/15 transition-colors"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>Full Screen QR</span>
-            </Link>
+              <Link
+                href="/dashboard/qr"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/15 transition-colors"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>Full Screen QR</span>
+              </Link>
+            </div>
           </div>
-        </div>
 
-        {/* Live Interactive Card Preview on Dashboard */}
-        <div className="w-full max-w-sm shrink-0 flex flex-col items-center">
-          {profile && (
+          <div className="w-full max-w-sm shrink-0 flex flex-col items-center">
             <CardPreview
               profile={profile}
-              cardCode="TC-8F72KX"
+              cardCode={profile.slug}
               cardType="matte_black"
               showToggle={true}
             />
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6">
+          <div className="space-y-2 text-center sm:text-left">
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-600">
+              Welcome to TapCard
+            </span>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
+              You haven&apos;t set up your digital profile yet
+            </h2>
+            <p className="text-xs text-slate-500 max-w-md">
+              Create your digital visiting card with your contact details, designation, WhatsApp, and social profiles.
+            </p>
+          </div>
 
-      {/* Metrics Counters Grid */}
+          <Link
+            href="/onboarding"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors shadow-sm shrink-0"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Create Your Profile</span>
+          </Link>
+        </div>
+      )}
+
+      {/* Real Database Metrics Counters */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
           {
@@ -222,7 +221,7 @@ export default function DashboardHomePage() {
 
               <div className="mt-3">
                 <p className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                  {isLoading ? '...' : card.value.toLocaleString()}
+                  {isLoading ? '0' : card.value.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -230,39 +229,13 @@ export default function DashboardHomePage() {
         })}
       </div>
 
-      {/* Profile Completion Alert if under 80% */}
-      {completionRate < 100 && (
-        <div className="bg-blue-50/70 p-4 rounded-xl border border-blue-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-blue-900">
-                Your profile is {completionRate}% complete
-              </p>
-              <p className="text-[11px] text-blue-700 mt-0.5">
-                Add your social channels, bio, and offered services to boost visitor engagement.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/dashboard/profile"
-            className="text-xs font-semibold text-blue-700 bg-white px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
-          >
-            Complete Profile
-          </Link>
-        </div>
-      )}
-
-      {/* Secondary Row: Recent Leads & Quick Actions */}
+      {/* Secondary Row: Leads & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Inbound Leads (2 Cols) */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <h3 className="text-base font-bold text-slate-900">Recent Leads & Inquiries</h3>
-              <p className="text-xs text-slate-500">People who submitted the enquiry form on your TapCard</p>
+              <h3 className="text-base font-bold text-slate-900">Recent Inquiries</h3>
+              <p className="text-xs text-slate-500">Inbound leads captured through your TapCard</p>
             </div>
             <Link
               href="/dashboard/leads"
@@ -278,7 +251,7 @@ export default function DashboardHomePage() {
               <Inbox className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p className="text-xs font-medium">No leads submitted yet.</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Share your TapCard link to start receiving inquiries.
+                When visitors submit an enquiry on your card, it will appear here.
               </p>
             </div>
           ) : (
@@ -316,43 +289,43 @@ export default function DashboardHomePage() {
           )}
         </div>
 
-        {/* Quick Actions Card (1 Col) */}
+        {/* Quick Actions Card */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4 flex flex-col justify-between">
           <div className="space-y-3">
             <h3 className="text-base font-bold text-slate-900">Quick Actions</h3>
 
             <div className="space-y-2">
               <Link
-                href="/dashboard/qr"
+                href="/dashboard/profile"
                 className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                    <QrCode className="w-4 h-4" />
+                    <Smartphone className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
-                      Download QR Code
+                      Edit Digital Profile
                     </p>
-                    <p className="text-[11px] text-slate-400">High-res PNG & SVG</p>
+                    <p className="text-[11px] text-slate-400">Photo, bio, WhatsApp, links</p>
                   </div>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-400" />
               </Link>
 
               <Link
-                href="/dashboard/cards"
+                href="/dashboard/qr"
                 className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
-                    <Wifi className="w-4 h-4" />
+                    <QrCode className="w-4 h-4" />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                      NFC Card Status
+                      Get QR Code
                     </p>
-                    <p className="text-[11px] text-slate-400">Inspect physical chips</p>
+                    <p className="text-[11px] text-slate-400">High-res PNG & SVG</p>
                   </div>
                 </div>
                 <ArrowRight className="w-4 h-4 text-slate-400" />
@@ -368,7 +341,7 @@ export default function DashboardHomePage() {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-600 transition-colors">
-                      Order Physical Card
+                      Order Physical NFC Card
                     </p>
                     <p className="text-[11px] text-slate-400">Matte, Gold, Wood</p>
                   </div>
@@ -380,7 +353,7 @@ export default function DashboardHomePage() {
 
           <div className="pt-4 border-t border-slate-100 text-center">
             <p className="text-[11px] text-slate-400">
-              Changes to your profile update your card instantly.
+              Your physical card always points to your live digital identity.
             </p>
           </div>
         </div>
