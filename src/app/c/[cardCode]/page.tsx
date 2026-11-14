@@ -20,11 +20,42 @@ interface PageProps {
   };
   searchParams: {
     source?: string;
+    p?: string;
   };
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { profile } = await repo.resolvePublicIdentifier(params.cardCode);
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
+  let { profile } = await repo.resolvePublicIdentifier(params.cardCode);
+
+  if (!profile && searchParams?.p) {
+    try {
+      const decodedStr = decodeURIComponent(escape(atob(searchParams.p)));
+      const mini = JSON.parse(decodedStr);
+      if (mini && mini.n) {
+        profile = {
+          id: mini.id || `prof_${params.cardCode}`,
+          user_id: `usr_${params.cardCode}`,
+          slug: mini.s || params.cardCode,
+          full_name: mini.n,
+          designation: mini.d || '',
+          company: mini.c || '',
+          bio: mini.b || '',
+          phone: mini.p || null,
+          whatsapp: mini.w || mini.p || null,
+          email: mini.e || null,
+          website: mini.u || null,
+          profile_photo: mini.ph || null,
+          theme: mini.th || 'professional',
+          accent_color: mini.ac || '#2563eb',
+          font_family: 'inter',
+          is_public: true,
+          status: 'ACTIVE',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      }
+    } catch {}
+  }
 
   if (!profile) {
     return {
@@ -53,6 +84,69 @@ export default async function PublicProfilePage({ params, searchParams }: PagePr
 
   let resolution = await repo.resolvePublicIdentifier(params.cardCode);
 
+  // If portable profile payload is included in URL (?p=...), hydrate it immediately
+  if (resolution.errorReason === 'CARD_NOT_FOUND' && searchParams.p) {
+    try {
+      const decodedStr = decodeURIComponent(escape(atob(searchParams.p)));
+      const mini = JSON.parse(decodedStr);
+      if (mini && mini.n) {
+        const payloadProfile: Profile = {
+          id: mini.id || `prof_${Date.now()}`,
+          user_id: `usr_${mini.s || params.cardCode}`,
+          slug: mini.s || params.cardCode,
+          full_name: mini.n,
+          designation: mini.d || '',
+          company: mini.c || '',
+          bio: mini.b || '',
+          phone: mini.p || null,
+          whatsapp: mini.w || mini.p || null,
+          email: mini.e || null,
+          website: mini.u || null,
+          profile_photo: mini.ph || null,
+          cover_image: null,
+          address: null,
+          city: null,
+          country: 'India',
+          linkedin: mini.in || null,
+          instagram: mini.ig || null,
+          facebook: null,
+          twitter: mini.tw || null,
+          youtube: null,
+          github: mini.gh || null,
+          theme: mini.th || 'professional',
+          accent_color: mini.ac || '#2563eb',
+          font_family: 'inter',
+          services: [],
+          custom_whatsapp_message: `Hi ${mini.n}, I saw your TapCard and would love to connect!`,
+          is_public: true,
+          status: 'ACTIVE',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        // Cache in repo so subsequent visits work directly
+        repo.cacheExternalProfile(payloadProfile).catch(() => {});
+
+        resolution = {
+          profile: payloadProfile,
+          card: {
+            id: 'card_portable',
+            card_code: mini.s || params.cardCode,
+            profile_id: payloadProfile.id,
+            user_id: payloadProfile.user_id,
+            card_type: 'matte_black',
+            design_template: 'corporate',
+            status: 'ACTIVE',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        };
+      }
+    } catch (e) {
+      console.warn('Failed parsing portable QR payload:', e);
+    }
+  }
+
   // If not found in memory/database, check if profile exists in user's request cookie
   if (resolution.errorReason === 'CARD_NOT_FOUND') {
     try {
@@ -65,8 +159,7 @@ export default async function PublicProfilePage({ params, searchParams }: PagePr
           decoded &&
           (decoded.slug?.toLowerCase() === cleanId ||
            decoded.id === cleanId ||
-           cleanId === 'preview' ||
-           cleanId === 'aman')
+           cleanId === 'preview')
         ) {
           resolution = {
             profile: decoded,

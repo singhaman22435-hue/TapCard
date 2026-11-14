@@ -179,7 +179,7 @@ export default function OnboardingPage() {
               <Input
                 label="Full Name *"
                 required
-                placeholder="e.g. Aman Singh"
+                placeholder="e.g. John Doe"
                 leftIcon={<User className="w-4 h-4 text-slate-400" />}
                 value={formData.fullName}
                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
@@ -187,7 +187,7 @@ export default function OnboardingPage() {
 
               <Input
                 label="Designation / Role"
-                placeholder="e.g. Senior Full Stack Engineer"
+                placeholder="e.g. Founder & CEO"
                 leftIcon={<Briefcase className="w-4 h-4 text-slate-400" />}
                 value={formData.designation}
                 onChange={(e) => setFormData({ ...formData, designation: e.target.value })}

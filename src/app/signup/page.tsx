@@ -78,7 +78,7 @@ export default function SignUpPage() {
               label="Full Name"
               type="text"
               required
-              placeholder="e.g. Aman Singh"
+              placeholder="e.g. John Doe"
               leftIcon={<User className="w-4 h-4 text-slate-400" />}
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}

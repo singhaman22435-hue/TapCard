@@ -22,6 +22,60 @@ export function ClientProfileFallback({ cardCode, source }: ClientProfileFallbac
 
   useEffect(() => {
     try {
+      // 1. Check URL query params for ?p= portable profile payload
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const pParam = urlParams.get('p');
+        if (pParam) {
+          const decodedStr = decodeURIComponent(escape(atob(pParam)));
+          const mini = JSON.parse(decodedStr);
+          if (mini && mini.n) {
+            const payloadProfile: Profile = {
+              id: mini.id || `prof_${Date.now()}`,
+              user_id: `usr_${mini.s || cardCode}`,
+              slug: mini.s || cardCode,
+              full_name: mini.n,
+              designation: mini.d || '',
+              company: mini.c || '',
+              bio: mini.b || '',
+              phone: mini.p || null,
+              whatsapp: mini.w || mini.p || null,
+              email: mini.e || null,
+              website: mini.u || null,
+              profile_photo: mini.ph || null,
+              cover_image: null,
+              address: null,
+              city: null,
+              country: 'India',
+              linkedin: mini.in || null,
+              instagram: mini.ig || null,
+              facebook: null,
+              twitter: mini.tw || null,
+              youtube: null,
+              github: mini.gh || null,
+              theme: mini.th || 'professional',
+              accent_color: mini.ac || '#2563eb',
+              font_family: 'inter',
+              services: [],
+              custom_whatsapp_message: `Hi ${mini.n}, I saw your TapCard and would love to connect!`,
+              is_public: true,
+              status: 'ACTIVE',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+
+            try {
+              localStorage.setItem('tapcard_user_profile', JSON.stringify(payloadProfile));
+            } catch {}
+
+            setProfile(payloadProfile);
+            setIsChecking(false);
+            return;
+          }
+        }
+      }
+
+      // 2. Check local storage
       const stored = localStorage.getItem('tapcard_user_profile');
       if (stored) {
         const parsed = JSON.parse(stored) as Profile;
@@ -29,9 +83,10 @@ export function ClientProfileFallback({ cardCode, source }: ClientProfileFallbac
         if (
           parsed &&
           (parsed.slug?.toLowerCase() === cleanCode ||
+           parsed.id === cleanCode ||
            cleanCode === 'preview' ||
-           cleanCode === 'aman' ||
-           cleanCode.includes(parsed.slug?.toLowerCase() || ''))
+           cleanCode.includes(parsed.slug?.toLowerCase() || '') ||
+           cleanCode.startsWith('tc-'))
         ) {
           setProfile(parsed);
           setIsChecking(false);

@@ -20,8 +20,41 @@ function QRCodeContent() {
   const searchParams = useSearchParams();
   const specificCode = searchParams.get('code');
 
-  const cardCodeOrSlug = specificCode || profile?.slug || 'TC-DEMO';
-  const targetUrl = getCardUrl(cardCodeOrSlug, 'qr');
+  const cardCodeOrSlug = specificCode || profile?.slug || 'TC-CARD';
+  const baseUrl = getCardUrl(cardCodeOrSlug, 'qr');
+  let targetUrl = baseUrl;
+
+  if (profile && profile.full_name) {
+    try {
+      const isShortPhoto = Boolean(
+        profile.profile_photo &&
+        !profile.profile_photo.startsWith('data:') &&
+        profile.profile_photo.length < 120
+      );
+
+      const mini = {
+        n: (profile.full_name || '').slice(0, 40),
+        d: (profile.designation || '').slice(0, 40),
+        c: (profile.company || '').slice(0, 40),
+        b: (profile.bio || '').slice(0, 80),
+        p: (profile.phone || '').slice(0, 20),
+        w: (profile.whatsapp || profile.phone || '').slice(0, 20),
+        e: (profile.email || '').slice(0, 40),
+        u: (profile.website && profile.website.length < 60) ? profile.website : '',
+        ph: isShortPhoto ? profile.profile_photo : '',
+        th: profile.theme || 'professional',
+        ac: profile.accent_color || '#2563eb',
+        in: (profile.linkedin || '').slice(0, 30),
+        ig: (profile.instagram || '').slice(0, 30),
+      };
+      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(mini))));
+      if (encoded.length < 450) {
+        targetUrl = `${baseUrl}&p=${encoded}`;
+      }
+    } catch (e) {
+      targetUrl = baseUrl;
+    }
+  }
 
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copied, setCopied] = useState(false);
@@ -35,11 +68,26 @@ function QRCodeContent() {
         const url = await generateQRCodeDataUrl(targetUrl, {
           width: 600,
           margin: 2,
-          errorCorrectionLevel: 'H',
+          errorCorrectionLevel: 'M',
+          color: {
+            dark: '#000000',
+            light: '#ffffff',
+          },
         });
         setQrDataUrl(url);
       } catch (err) {
-        console.error('Error generating QR:', err);
+        console.warn('Payload QR failed, generating base URL QR:', err);
+        try {
+          const fallback = await generateQRCodeDataUrl(baseUrl, {
+            width: 600,
+            margin: 2,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#000000', light: '#ffffff' },
+          });
+          setQrDataUrl(fallback);
+        } catch (e) {
+          console.error('Fatal QR generation error:', e);
+        }
       } finally {
         setIsGenerating(false);
       }

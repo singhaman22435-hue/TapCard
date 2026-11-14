@@ -30,18 +30,54 @@ export function CardPreview({
   const [targetUrl, setTargetUrl] = useState<string>('');
 
   useEffect(() => {
-    // Generate URL dynamically using browser's actual origin
-    const url = getCardUrl(effectiveCode, 'qr');
+    // Generate clean base URL
+    const baseUrl = getCardUrl(effectiveCode, 'qr');
+    let url = baseUrl;
+
+    // If profile has data, include ultra-compact payload so ANY phone scanning
+    // the QR code instantly receives and hydrates the profile without server lookup
+    if (profile && profile.full_name) {
+      try {
+        const isShortPhoto = Boolean(
+          profile.profile_photo &&
+          !profile.profile_photo.startsWith('data:') &&
+          profile.profile_photo.length < 120
+        );
+
+        const mini = {
+          n: (profile.full_name || '').slice(0, 40),
+          d: (profile.designation || '').slice(0, 40),
+          c: (profile.company || '').slice(0, 40),
+          b: (profile.bio || '').slice(0, 80),
+          p: (profile.phone || '').slice(0, 20),
+          w: (profile.whatsapp || profile.phone || '').slice(0, 20),
+          e: (profile.email || '').slice(0, 40),
+          u: (profile.website && profile.website.length < 60) ? profile.website : '',
+          ph: isShortPhoto ? profile.profile_photo : '',
+          th: profile.theme || 'professional',
+          ac: profile.accent_color || '#2563eb',
+          in: (profile.linkedin || '').slice(0, 30),
+          ig: (profile.instagram || '').slice(0, 30),
+        };
+        const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(mini))));
+        // Ensure total URL does not exceed safe QR limit (~500 chars)
+        if (encoded.length < 450) {
+          url = `${baseUrl}&p=${encoded}`;
+        }
+      } catch (e) {
+        url = baseUrl;
+      }
+    }
+
     setTargetUrl(url);
 
     async function makeQR() {
       try {
-        // ALWAYS use standard black modules on pure white background
-        // Standard optical polarity is mandatory for phone camera scanners
+        // High contrast black on white with Level M correction for lightning-fast camera detection
         const qr = await generateQRCodeDataUrl(url, {
           width: 400,
           margin: 2,
-          errorCorrectionLevel: 'H',
+          errorCorrectionLevel: 'M',
           color: {
             dark: '#000000',
             light: '#ffffff',
@@ -49,11 +85,22 @@ export function CardPreview({
         });
         setQrDataUrl(qr);
       } catch (e) {
-        console.error('Failed generating card preview QR:', e);
+        console.warn('Payload QR failed, falling back to base URL QR:', e);
+        try {
+          const fallbackQr = await generateQRCodeDataUrl(baseUrl, {
+            width: 400,
+            margin: 2,
+            errorCorrectionLevel: 'M',
+            color: { dark: '#000000', light: '#ffffff' },
+          });
+          setQrDataUrl(fallbackQr);
+        } catch (err) {
+          console.error('Failed generating QR code:', err);
+        }
       }
     }
     makeQR();
-  }, [effectiveCode]);
+  }, [effectiveCode, profile]);
 
   // Styling based on card material
   const materialStyles: Record<CardType, { cardBg: string; textColor: string; subColor: string; accentBorder: string }> = {
@@ -116,10 +163,10 @@ export function CardPreview({
 
             <div className="z-10 space-y-1">
               <h4 className={`text-xl font-bold tracking-tight ${currentTheme.textColor}`}>
-                {profile.full_name || 'Aman Singh'}
+                {profile.full_name || 'Your Name'}
               </h4>
               <p className={`text-xs font-medium tracking-wide ${currentTheme.subColor}`}>
-                {profile.designation || 'Senior Full Stack Engineer'}
+                {profile.designation || 'Your Designation'}
               </p>
             </div>
 

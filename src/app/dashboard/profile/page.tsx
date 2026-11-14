@@ -130,6 +130,11 @@ export default function ProfileEditorPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!formData.full_name.trim()) {
+      setErrorMessage('Full Name is required.');
+      return;
+    }
+
     setIsSaving(true);
     setSuccessMessage('');
     setErrorMessage('');
@@ -138,16 +143,19 @@ export default function ProfileEditorPage() {
       const isNew = !profile?.id;
       const url = '/api/profile';
       const method = isNew ? 'POST' : 'PUT';
+      const userSlug = profile?.slug || slugify(formData.full_name.trim());
       const body = isNew
         ? {
             ...formData,
             user_id: user?.id || `usr_${Date.now()}`,
-            full_name: formData.full_name || user?.fullName || 'Aman Singh',
-            slug: slugify(formData.full_name || 'aman'),
+            full_name: formData.full_name.trim(),
+            slug: userSlug,
           }
         : {
             id: profile.id,
             ...formData,
+            full_name: formData.full_name.trim(),
+            slug: userSlug,
           };
 
       const res = await fetch(url, {
@@ -333,7 +341,7 @@ export default function ProfileEditorPage() {
 
           <Input
             label="Custom WhatsApp Introductory Message"
-            placeholder="Hi Aman, I just tapped your TapCard! I'd love to connect..."
+            placeholder="Hi, I just tapped your TapCard! I'd love to connect..."
             value={formData.custom_whatsapp_message}
             onChange={(e) => setFormData({ ...formData, custom_whatsapp_message: e.target.value })}
             helperText="Pre-filled text that appears when someone taps the WhatsApp button on your card"

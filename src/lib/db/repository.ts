@@ -23,6 +23,8 @@ import {
 } from './mock-data';
 import { generateCardCode, getCardUrl, slugify } from '../utils';
 
+const CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1d95b73eb2852';
+
 // Global in-memory / persistent cache for runtime state
 class TapCardDatabase {
   private profiles: Profile[] = [...INITIAL_PROFILES];
@@ -31,31 +33,154 @@ class TapCardDatabase {
   private analytics: AnalyticsEvent[] = [...INITIAL_ANALYTICS];
   private orders: Order[] = [...INITIAL_ORDERS];
   private plans: AppPlan[] = [...DEFAULT_PLANS];
+  private lastSynced: number = 0;
+
+  private async pullCloud(): Promise<void> {
+    try {
+      const res = await fetch(CLOUD_SYNC_URL, { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.data) {
+          if (Array.isArray(json.data.profiles) && json.data.profiles.length > 0) {
+            for (const cp of json.data.profiles) {
+              const idx = this.profiles.findIndex((p) => p.id === cp.id || p.slug.toLowerCase() === cp.slug.toLowerCase());
+              if (idx !== -1) {
+                this.profiles[idx] = { ...this.profiles[idx], ...cp };
+              } else {
+                this.profiles.push(cp);
+              }
+            }
+          }
+          if (Array.isArray(json.data.cards) && json.data.cards.length > 0) {
+            for (const cc of json.data.cards) {
+              const idx = this.cards.findIndex((c) => c.id === cc.id || c.card_code.toLowerCase() === cc.card_code.toLowerCase());
+              if (idx !== -1) {
+                this.cards[idx] = { ...this.cards[idx], ...cc };
+              } else {
+                this.cards.push(cc);
+              }
+            }
+          }
+          this.lastSynced = Date.now();
+        }
+      }
+    } catch (e) {}
+  }
+
+  private async pushCloud(): Promise<void> {
+    try {
+      const cleanProfiles = this.profiles.map((p) => ({
+        id: p.id,
+        user_id: p.user_id,
+        slug: p.slug,
+        full_name: p.full_name,
+        designation: p.designation || '',
+        company: p.company || '',
+        bio: p.bio || '',
+        phone: p.phone || '',
+        whatsapp: p.whatsapp || p.phone || '',
+        email: p.email || '',
+        website: p.website || '',
+        theme: p.theme || 'professional',
+        accent_color: p.accent_color || '#2563eb',
+        font_family: p.font_family || 'inter',
+        status: p.status || 'ACTIVE',
+        is_public: p.is_public ?? true,
+        created_at: p.created_at || new Date().toISOString(),
+        updated_at: p.updated_at || new Date().toISOString(),
+      }));
+
+      const cleanCards = this.cards.map((c) => ({
+        id: c.id,
+        card_code: c.card_code,
+        profile_id: c.profile_id,
+        user_id: c.user_id,
+        card_type: c.card_type || 'matte_black',
+        design_template: c.design_template || 'corporate',
+        status: c.status || 'ACTIVE',
+      }));
+
+      await fetch(CLOUD_SYNC_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'tapcard_cloud_db',
+          data: {
+            profiles: cleanProfiles,
+            cards: cleanCards,
+          },
+        }),
+      });
+      this.lastSynced = Date.now();
+    } catch (e) {}
+  }
+
+  async cacheExternalProfile(profile: Profile): Promise<void> {
+    const existingIdx = this.profiles.findIndex(
+      (p) => p.id === profile.id || p.slug.toLowerCase() === profile.slug.toLowerCase()
+    );
+    if (existingIdx !== -1) {
+      this.profiles[existingIdx] = profile;
+    } else {
+      this.profiles.push(profile);
+    }
+    if (!this.cards.some((c) => c.profile_id === profile.id || c.card_code === profile.slug)) {
+      this.cards.push({
+        id: `card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        card_code: profile.slug,
+        profile_id: profile.id,
+        user_id: profile.user_id,
+        card_type: 'matte_black',
+        design_template: 'corporate',
+        status: 'ACTIVE',
+        short_url: getCardUrl(profile.slug),
+        assigned_at: new Date().toISOString(),
+        activated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+    this.pushCloud().catch(() => {});
+  }
 
   // -------------------------------------------------------------
   // PROFILES
   // -------------------------------------------------------------
   async getProfileById(id: string): Promise<Profile | null> {
-    const prof = this.profiles.find((p) => p.id === id);
+    let prof = this.profiles.find((p) => p.id === id);
+    if (!prof) {
+      await this.pullCloud();
+      prof = this.profiles.find((p) => p.id === id);
+    }
     return prof ? { ...prof } : null;
   }
 
   async getProfileByUserId(userId: string): Promise<Profile | null> {
-    const prof = this.profiles.find((p) => p.user_id === userId);
+    let prof = this.profiles.find((p) => p.user_id === userId);
+    if (!prof) {
+      await this.pullCloud();
+      prof = this.profiles.find((p) => p.user_id === userId);
+    }
     return prof ? { ...prof } : null;
   }
 
   async getProfileBySlug(slug: string): Promise<Profile | null> {
     const cleanSlug = slug.toLowerCase().trim();
-    const prof = this.profiles.find((p) => p.slug.toLowerCase() === cleanSlug);
+    let prof = this.profiles.find((p) => p.slug.toLowerCase() === cleanSlug);
+    if (!prof) {
+      await this.pullCloud();
+      prof = this.profiles.find((p) => p.slug.toLowerCase() === cleanSlug);
+    }
     return prof ? { ...prof } : null;
   }
 
   async getAllProfiles(): Promise<Profile[]> {
+    await this.pullCloud();
     return [...this.profiles];
   }
 
   async createProfile(data: Partial<Profile> & { full_name: string; user_id: string }): Promise<Profile> {
+    await this.pullCloud();
     const id = `prof_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const baseSlug = slugify(data.slug || data.full_name);
     let uniqueSlug = baseSlug;
@@ -100,7 +225,12 @@ class TapCardDatabase {
       updated_at: new Date().toISOString(),
     };
 
-    this.profiles.push(newProfile);
+    const existingIndex = this.profiles.findIndex((p) => p.user_id === data.user_id);
+    if (existingIndex !== -1) {
+      this.profiles[existingIndex] = newProfile;
+    } else {
+      this.profiles.push(newProfile);
+    }
 
     // Automatically generate and link an active NFC TapCard card for this profile
     const cardCode = generateCardCode();
@@ -120,10 +250,12 @@ class TapCardDatabase {
     };
     this.cards.push(newCard);
 
+    this.pushCloud().catch(() => {});
     return { ...newProfile };
   }
 
   async updateProfile(id: string, updates: Partial<Profile>): Promise<Profile | null> {
+    await this.pullCloud();
     const index = this.profiles.findIndex((p) => p.id === id);
     if (index === -1) return null;
 
@@ -135,6 +267,7 @@ class TapCardDatabase {
     };
 
     this.profiles[index] = updated;
+    this.pushCloud().catch(() => {});
     return { ...updated };
   }
 
@@ -146,6 +279,7 @@ class TapCardDatabase {
     card: Card | null;
     errorReason?: 'CARD_NOT_FOUND' | 'CARD_INACTIVE' | 'CARD_REPLACED' | 'CARD_UNASSIGNED' | 'PROFILE_INACTIVE';
   }> {
+    await this.pullCloud();
     const cleanId = decodeURIComponent(identifier).trim();
 
     // 1. First check if it matches a card code (case-insensitive)
