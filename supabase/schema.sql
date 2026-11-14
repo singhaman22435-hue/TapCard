@@ -153,19 +153,36 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('tapcard-assets', 'tapcard-assets', true)
 ON CONFLICT (id) DO NOTHING;
 
--- RLS POLICIES
+-- RLS POLICIES (Idempotent: Drops existing policy before creating)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.analytics_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Public can view active profiles" ON public.profiles;
 CREATE POLICY "Public can view active profiles" ON public.profiles FOR SELECT TO public USING (true);
+
+DROP POLICY IF EXISTS "Users can manage own profile" ON public.profiles;
 CREATE POLICY "Users can manage own profile" ON public.profiles FOR ALL TO public USING (true);
+
+DROP POLICY IF EXISTS "Public can lookup cards" ON public.cards;
 CREATE POLICY "Public can lookup cards" ON public.cards FOR SELECT TO public USING (true);
+
+DROP POLICY IF EXISTS "Cards manage" ON public.cards;
 CREATE POLICY "Cards manage" ON public.cards FOR ALL TO public USING (true);
+
+DROP POLICY IF EXISTS "Public can insert lead" ON public.leads;
 CREATE POLICY "Public can insert lead" ON public.leads FOR INSERT TO public WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users view leads" ON public.leads;
 CREATE POLICY "Users view leads" ON public.leads FOR ALL TO public USING (true);
+
+DROP POLICY IF EXISTS "Public insert analytics" ON public.analytics_events;
 CREATE POLICY "Public insert analytics" ON public.analytics_events FOR INSERT TO public WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public read storage" ON storage.objects;
 CREATE POLICY "Public read storage" ON storage.objects FOR SELECT TO public USING (bucket_id = 'tapcard-assets');
+
+DROP POLICY IF EXISTS "Public upload storage" ON storage.objects;
 CREATE POLICY "Public upload storage" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'tapcard-assets');
