@@ -86,11 +86,26 @@ export function getWhatsAppUrl(phone: string, message?: string | null): string {
 }
 
 /**
+ * Get current base URL of application with automatic Vercel domain detection
+ */
+export function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '');
+  }
+  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+    return `https://${process.env.NEXT_PUBLIC_VERCEL_URL.replace(/\/$/, '')}`;
+  }
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin;
+  }
+  return 'https://digitapcard-six.vercel.app';
+}
+
+/**
  * Generate full public card URL
  */
 export function getCardUrl(cardCodeOrSlug: string, source?: 'nfc' | 'qr'): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://tapcard.in';
-  const url = `${baseUrl.replace(/\/$/, '')}/c/${cardCodeOrSlug}`;
+  const baseUrl = getBaseUrl();
+  const url = `${baseUrl}/c/${cardCodeOrSlug}`;
   return source ? `${url}?source=${source}` : url;
 }
-

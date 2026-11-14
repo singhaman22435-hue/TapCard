@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth/auth-context';
+import { getBaseUrl } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'TapCard | One Card. Your Entire Professional Identity.',
   description:
     'Instant NFC & QR Digital Visiting Cards. Share contact info, WhatsApp, portfolio, and social channels with a single tap. No app required.',
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://tapcard.in'),
+  metadataBase: new URL(getBaseUrl()),
   openGraph: {
     title: 'TapCard | NFC + QR Digital Visiting Card Platform',
     description: 'One Card. Your Entire Professional Identity. Tap. Connect. Grow.',
