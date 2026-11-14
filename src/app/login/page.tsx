@@ -27,11 +27,7 @@ export default function LoginPage() {
       if (result.error) {
         setError(result.error);
       } else {
-        if (email.toLowerCase().includes('admin')) {
-          router.push('/admin');
-        } else {
-          router.push('/dashboard');
-        }
+        router.push('/dashboard');
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.');

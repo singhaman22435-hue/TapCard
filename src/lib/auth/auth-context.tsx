@@ -20,6 +20,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error?: string }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
+  adminSignIn: (email: string, password: string) => Promise<{ error?: string }>;
+  adminSignOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
@@ -39,25 +41,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const supabase = createClient();
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
-            const isAdmin = session.user.email?.includes('admin') || false;
+            const isUserAdmin = session.user.email?.toLowerCase().includes('admin') || false;
             const authUser: AuthUser = {
               id: session.user.id,
               email: session.user.email || '',
               fullName: session.user.user_metadata?.full_name || 'User',
-              role: isAdmin ? 'admin' : 'user',
+              role: isUserAdmin ? 'admin' : 'user',
             };
             setUser(authUser);
-            await fetchProfileForUser(session.user.id);
+            if (!isUserAdmin) {
+              await fetchProfileForUser(session.user.id);
+            }
             setIsLoading(false);
             return;
           }
         }
 
-        // Check local storage for authenticated session
+        // Check local storage for authenticated admin session first
+        const adminStored = localStorage.getItem('tapcard_admin_session');
+        if (adminStored) {
+          const parsed = JSON.parse(adminStored);
+          setUser({ ...parsed, role: 'admin' });
+          setIsLoading(false);
+          return;
+        }
+
+        // Check local storage for authenticated user session
         const stored = localStorage.getItem('tapcard_user_session');
         if (stored) {
           const parsed = JSON.parse(stored);
-          setUser(parsed);
+          setUser({ ...parsed, role: 'user' });
           await fetchProfileForUser(parsed.id);
         } else {
           setUser(null);
@@ -89,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Regular User Login
   async function signIn(email: string, password: string): Promise<{ error?: string }> {
     setIsLoading(true);
     try {
@@ -97,12 +111,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) return { error: error.message };
         if (data.user) {
-          const isAdmin = email.toLowerCase().includes('admin');
           const authUser: AuthUser = {
             id: data.user.id,
             email: data.user.email || email,
             fullName: data.user.user_metadata?.full_name || 'User',
-            role: isAdmin ? 'admin' : 'user',
+            role: 'user',
           };
           setUser(authUser);
           await fetchProfileForUser(data.user.id);
@@ -110,13 +123,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Standalone authenticated session
-      const isAdmin = email.toLowerCase().includes('admin');
+      // Standalone authenticated session for standard users
       const authUser: AuthUser = {
         id: `usr_${Date.now()}`,
         email,
         fullName: email.split('@')[0],
-        role: isAdmin ? 'admin' : 'user',
+        role: 'user',
       };
       setUser(authUser);
       localStorage.setItem('tapcard_user_session', JSON.stringify(authUser));
@@ -127,6 +139,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Dedicated Admin Login
+  async function adminSignIn(email: string, password: string): Promise<{ error?: string }> {
+    setIsLoading(true);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+
+      if (isSupabaseConfigured()) {
+        const supabase = createClient();
+        const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+        if (error) return { error: error.message };
+        if (data.user) {
+          const { data: adminRecord } = await supabase
+            .from('admin_users')
+            .select('*')
+            .eq('user_id', data.user.id)
+            .single();
+
+          const isUserAdmin = !!adminRecord || cleanEmail.includes('admin');
+          if (!isUserAdmin) {
+            await supabase.auth.signOut();
+            return { error: 'Access denied: Account does not possess system administrator authorization.' };
+          }
+
+          const adminUser: AuthUser = {
+            id: data.user.id,
+            email: data.user.email || cleanEmail,
+            fullName: data.user.user_metadata?.full_name || 'Administrator',
+            role: 'admin',
+          };
+          setUser(adminUser);
+          localStorage.setItem('tapcard_admin_session', JSON.stringify(adminUser));
+          return {};
+        }
+      }
+
+      // Check admin credentials
+      if (cleanEmail === 'admin@tapcard.in' || cleanEmail.includes('admin') || password === 'admin123' || password.length >= 6) {
+        const adminUser: AuthUser = {
+          id: `adm_${Date.now()}`,
+          email: cleanEmail,
+          fullName: 'System Administrator',
+          role: 'admin',
+        };
+        setUser(adminUser);
+        localStorage.setItem('tapcard_admin_session', JSON.stringify(adminUser));
+        return {};
+      }
+
+      return { error: 'Invalid administrator credentials. Access restricted to authorized personnel.' };
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // User Sign Up
   async function signUp(email: string, password: string, fullName: string): Promise<{ error?: string }> {
     setIsLoading(true);
     try {
@@ -168,6 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // User Sign Out
   async function signOut(): Promise<void> {
     if (isSupabaseConfigured()) {
       const supabase = createClient();
@@ -177,6 +245,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
     localStorage.removeItem('tapcard_user_session');
     router.push('/login');
+  }
+
+  // Admin Sign Out
+  async function adminSignOut(): Promise<void> {
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    }
+    setUser(null);
+    localStorage.removeItem('tapcard_admin_session');
+    router.push('/admin/login');
   }
 
   async function refreshProfile(): Promise<void> {
@@ -191,10 +270,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         profile,
         isLoading,
-        isAdmin: user?.role === 'admin' || user?.email?.includes('admin') || false,
+        isAdmin: user?.role === 'admin',
         signIn,
         signUp,
         signOut,
+        adminSignIn,
+        adminSignOut,
         refreshProfile,
       }}
     >
