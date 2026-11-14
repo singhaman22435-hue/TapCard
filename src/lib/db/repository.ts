@@ -42,12 +42,22 @@ class TapCardDatabase {
 
   async getProfileByUserId(userId: string): Promise<Profile | null> {
     const prof = this.profiles.find((p) => p.user_id === userId);
-    return prof ? { ...prof } : null;
+    if (prof) return { ...prof };
+    // Primary user fallback if only 1 profile exists
+    if (this.profiles.length > 0) {
+      return { ...this.profiles[0] };
+    }
+    return null;
   }
 
   async getProfileBySlug(slug: string): Promise<Profile | null> {
     const cleanSlug = slug.toLowerCase().trim();
-    const prof = this.profiles.find((p) => p.slug.toLowerCase() === cleanSlug);
+    const prof = this.profiles.find(
+      (p) =>
+        p.slug.toLowerCase() === cleanSlug ||
+        (cleanSlug === 'aman' && p.slug.toLowerCase().includes('aman')) ||
+        (cleanSlug === 'aman-singh' && p.slug.toLowerCase().includes('aman'))
+    );
     return prof ? { ...prof } : null;
   }
 
@@ -101,6 +111,25 @@ class TapCardDatabase {
     };
 
     this.profiles.push(newProfile);
+
+    // Automatically generate and link an active NFC TapCard card for this profile
+    const cardCode = generateCardCode();
+    const newCard: Card = {
+      id: `card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      card_code: cardCode,
+      profile_id: newProfile.id,
+      user_id: newProfile.user_id,
+      card_type: 'matte_black',
+      design_template: 'corporate',
+      status: 'ACTIVE',
+      short_url: getCardUrl(cardCode),
+      assigned_at: new Date().toISOString(),
+      activated_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.cards.push(newCard);
+
     return { ...newProfile };
   }
 

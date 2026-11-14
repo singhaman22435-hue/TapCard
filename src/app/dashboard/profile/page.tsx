@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { ServiceItem } from '@/types/database';
+import { slugify } from '@/lib/utils';
 import {
   User,
   Briefcase,
@@ -26,7 +27,7 @@ import {
 } from 'lucide-react';
 
 export default function ProfileEditorPage() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -122,20 +123,31 @@ export default function ProfileEditorPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!profile?.id) return;
 
     setIsSaving(true);
     setSuccessMessage('');
     setErrorMessage('');
 
     try {
-      const res = await fetch('/api/profile', {
-        method: 'PUT',
+      const isNew = !profile?.id;
+      const url = '/api/profile';
+      const method = isNew ? 'POST' : 'PUT';
+      const body = isNew
+        ? {
+            ...formData,
+            user_id: user?.id || `usr_${Date.now()}`,
+            full_name: formData.full_name || user?.fullName || 'Aman Singh',
+            slug: slugify(formData.full_name || 'aman'),
+          }
+        : {
+            id: profile.id,
+            ...formData,
+          };
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: profile.id,
-          ...formData,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();

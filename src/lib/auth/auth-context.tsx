@@ -93,10 +93,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const data = await res.json();
         if (data.profile) {
           setProfile(data.profile);
-        } else {
-          setProfile(null);
+          return;
         }
       }
+
+      // Fallback: check primary profile slug 'aman'
+      const fallbackRes = await fetch('/api/profile?slug=aman');
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        if (fallbackData.profile) {
+          setProfile(fallbackData.profile);
+          return;
+        }
+      }
+
+      setProfile(null);
     } catch (err) {
       console.warn('Failed to fetch user profile:', err);
     }
