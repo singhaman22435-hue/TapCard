@@ -89,3 +89,4 @@ https://tapcard.in/c/TC-8F72KX?source=qr
 ```
 - Built with **Level H Error Correction (30% recovery)** so the code remains readable even if scratched or worn.
 - Allows instant connection on devices with disabled or unsupported NFC antennas.
+

@@ -27,3 +27,4 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'Failed to update plan' }, { status: 500 });
   }
 }
+

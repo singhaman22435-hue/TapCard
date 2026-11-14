@@ -69,3 +69,4 @@ export function ProfileFooter({ fullName }: ProfileFooterProps) {
     </div>
   );
 }
+

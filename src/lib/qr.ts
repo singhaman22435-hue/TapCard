@@ -81,3 +81,4 @@ export async function downloadQRCodeSvg(
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+

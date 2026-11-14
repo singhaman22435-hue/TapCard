@@ -198,3 +198,4 @@ GET http://localhost:3000/api/test-suite
 - Dedicated Android Admin NFC Writer App (using Kotlin and Android NDEF APIs).
 - Native Razorpay & Stripe webhook automation for physical card orders.
 - Enterprise SSO and White-label custom domains (`cards.yourcompany.com`).
+

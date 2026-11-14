@@ -93,3 +93,4 @@ export function getCardUrl(cardCodeOrSlug: string, source?: 'nfc' | 'qr'): strin
   const url = `${baseUrl.replace(/\/$/, '')}/c/${cardCodeOrSlug}`;
   return source ? `${url}?source=${source}` : url;
 }
+

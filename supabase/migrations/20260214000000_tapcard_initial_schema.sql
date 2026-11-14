@@ -350,3 +350,4 @@ CREATE POLICY "Users can view own subscriptions" ON public.subscriptions
 
 CREATE POLICY "Admins can manage subscriptions" ON public.subscriptions
     FOR ALL TO authenticated USING (public.is_admin(auth.uid()));
+

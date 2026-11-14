@@ -189,3 +189,4 @@ export default async function PublicProfilePage({ params, searchParams }: PagePr
     </main>
   );
 }
+

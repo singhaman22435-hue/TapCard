@@ -216,3 +216,4 @@ export const DEFAULT_PLANS: AppPlan[] = [
     ],
   }
 ];
+

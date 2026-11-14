@@ -102,3 +102,4 @@ export function ProfileHeader({ profile }: ProfileHeaderProps) {
     </div>
   );
 }
+

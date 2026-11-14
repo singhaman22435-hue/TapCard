@@ -48,3 +48,4 @@ export function ServicesSection({ profile }: ServicesSectionProps) {
     </div>
   );
 }
+

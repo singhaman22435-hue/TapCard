@@ -176,3 +176,4 @@ export function LeadForm({ profile, cardId, source = 'direct' }: LeadFormProps) 
     </div>
   );
 }
+

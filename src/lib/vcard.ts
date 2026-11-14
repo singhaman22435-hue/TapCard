@@ -73,3 +73,4 @@ export function downloadVCard(profile: Partial<Profile>, filename?: string) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
