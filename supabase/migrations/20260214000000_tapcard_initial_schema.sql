@@ -351,3 +351,19 @@ CREATE POLICY "Users can view own subscriptions" ON public.subscriptions
 CREATE POLICY "Admins can manage subscriptions" ON public.subscriptions
     FOR ALL TO authenticated USING (public.is_admin(auth.uid()));
 
+-- ------------------------------------------------------------------------------
+-- 11. STORAGE BUCKET FOR USER IMAGES & ASSETS
+-- ------------------------------------------------------------------------------
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('tapcard-assets', 'tapcard-assets', true)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "Public read tapcard-assets" ON storage.objects
+    FOR SELECT TO public USING (bucket_id = 'tapcard-assets');
+
+CREATE POLICY "Allow uploads to tapcard-assets" ON storage.objects
+    FOR INSERT TO public WITH CHECK (bucket_id = 'tapcard-assets');
+
+CREATE POLICY "Allow update/delete on tapcard-assets" ON storage.objects
+    FOR ALL TO public USING (bucket_id = 'tapcard-assets');
+
