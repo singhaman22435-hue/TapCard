@@ -13,143 +13,15 @@ import {
   CardType,
   AppPlan,
 } from '@/types/database';
-import {
-  INITIAL_PROFILES,
-  INITIAL_CARDS,
-  INITIAL_LEADS,
-  INITIAL_ANALYTICS,
-  INITIAL_ORDERS,
-  DEFAULT_PLANS,
-} from './mock-data';
+import { DEFAULT_PLANS } from './mock-data';
 import { generateCardCode, getCardUrl, slugify } from '../utils';
 import { createAdminClient } from '@/lib/supabase/admin';
 
-const CLOUD_SYNC_URL = 'https://api.restful-api.dev/objects/ff808181a09d98f701a1d95b73eb2852';
-
-// Global in-memory / persistent cache for runtime state
 class TapCardDatabase {
-  private profiles: Profile[] = [...INITIAL_PROFILES];
-  private cards: Card[] = [...INITIAL_CARDS];
-  private leads: Lead[] = [...INITIAL_LEADS];
-  private analytics: AnalyticsEvent[] = [...INITIAL_ANALYTICS];
-  private orders: Order[] = [...INITIAL_ORDERS];
   private plans: AppPlan[] = [...DEFAULT_PLANS];
-  private lastSynced: number = 0;
 
   private getSupabase() {
-    try {
-      return createAdminClient();
-    } catch {
-      return null;
-    }
-  }
-
-  private async pullCloud(): Promise<void> {
-    try {
-      const res = await fetch(CLOUD_SYNC_URL, { cache: 'no-store' });
-      if (res.ok) {
-        const json = await res.json();
-        if (json?.data) {
-          if (Array.isArray(json.data.profiles) && json.data.profiles.length > 0) {
-            for (const cp of json.data.profiles) {
-              const idx = this.profiles.findIndex((p) => p.id === cp.id || p.slug.toLowerCase() === cp.slug.toLowerCase());
-              if (idx !== -1) {
-                this.profiles[idx] = { ...this.profiles[idx], ...cp };
-              } else {
-                this.profiles.push(cp);
-              }
-            }
-          }
-          if (Array.isArray(json.data.cards) && json.data.cards.length > 0) {
-            for (const cc of json.data.cards) {
-              const idx = this.cards.findIndex((c) => c.id === cc.id || c.card_code.toLowerCase() === cc.card_code.toLowerCase());
-              if (idx !== -1) {
-                this.cards[idx] = { ...this.cards[idx], ...cc };
-              } else {
-                this.cards.push(cc);
-              }
-            }
-          }
-          this.lastSynced = Date.now();
-        }
-      }
-    } catch (e) {}
-  }
-
-  private async pushCloud(): Promise<void> {
-    try {
-      const cleanProfiles = this.profiles.map((p) => ({
-        id: p.id,
-        user_id: p.user_id,
-        slug: p.slug,
-        full_name: p.full_name,
-        designation: p.designation || '',
-        company: p.company || '',
-        bio: p.bio || '',
-        phone: p.phone || '',
-        whatsapp: p.whatsapp || p.phone || '',
-        email: p.email || '',
-        website: p.website || '',
-        theme: p.theme || 'professional',
-        accent_color: p.accent_color || '#2563eb',
-        font_family: p.font_family || 'inter',
-        status: p.status || 'ACTIVE',
-        is_public: p.is_public ?? true,
-        created_at: p.created_at || new Date().toISOString(),
-        updated_at: p.updated_at || new Date().toISOString(),
-      }));
-
-      const cleanCards = this.cards.map((c) => ({
-        id: c.id,
-        card_code: c.card_code,
-        profile_id: c.profile_id,
-        user_id: c.user_id,
-        card_type: c.card_type || 'matte_black',
-        design_template: c.design_template || 'corporate',
-        status: c.status || 'ACTIVE',
-      }));
-
-      await fetch(CLOUD_SYNC_URL, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'tapcard_cloud_db',
-          data: {
-            profiles: cleanProfiles,
-            cards: cleanCards,
-          },
-        }),
-      });
-      this.lastSynced = Date.now();
-    } catch (e) {}
-  }
-
-  async cacheExternalProfile(profile: Profile): Promise<void> {
-    const existingIdx = this.profiles.findIndex(
-      (p) => p.id === profile.id || p.slug.toLowerCase() === profile.slug.toLowerCase()
-    );
-    if (existingIdx !== -1) {
-      this.profiles[existingIdx] = profile;
-    } else {
-      this.profiles.push(profile);
-    }
-    if (!this.cards.some((c) => c.profile_id === profile.id || c.card_code === profile.slug)) {
-      this.cards.push({
-        id: `card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        card_code: profile.slug,
-        profile_id: profile.id,
-        user_id: profile.user_id,
-        card_type: 'matte_black',
-        design_template: 'corporate',
-        status: 'ACTIVE',
-        short_url: getCardUrl(profile.slug),
-        assigned_at: new Date().toISOString(),
-        activated_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-    }
-    this.pushCloud().catch(() => {});
+    return createAdminClient();
   }
 
   // -------------------------------------------------------------
@@ -157,66 +29,100 @@ class TapCardDatabase {
   // -------------------------------------------------------------
   async getProfileById(id: string): Promise<Profile | null> {
     const supabase = this.getSupabase();
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
-        if (!error && data) return data as Profile;
-      } catch {}
+    if (!supabase) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error || !data) return null;
+      return data as Profile;
+    } catch (e) {
+      console.error('getProfileById error:', e);
+      return null;
     }
-    let prof = this.profiles.find((p) => p.id === id);
-    if (!prof) {
-      await this.pullCloud();
-      prof = this.profiles.find((p) => p.id === id);
-    }
-    return prof ? { ...prof } : null;
   }
 
   async getProfileByUserId(userId: string): Promise<Profile | null> {
     const supabase = this.getSupabase();
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).single();
-        if (!error && data) return data as Profile;
-      } catch {}
+    if (!supabase) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !data) return null;
+      return data as Profile;
+    } catch (e) {
+      console.error('getProfileByUserId error:', e);
+      return null;
     }
-    let prof = this.profiles.find((p) => p.user_id === userId);
-    if (!prof) {
-      await this.pullCloud();
-      prof = this.profiles.find((p) => p.user_id === userId);
-    }
-    return prof ? { ...prof } : null;
   }
 
   async getProfileBySlug(slug: string): Promise<Profile | null> {
     const cleanSlug = slug.toLowerCase().trim();
     const supabase = this.getSupabase();
-    if (supabase) {
-      try {
-        const { data, error } = await supabase.from('profiles').select('*').ilike('slug', cleanSlug).single();
-        if (!error && data) return data as Profile;
-      } catch {}
+    if (!supabase) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('slug', cleanSlug)
+        .single();
+
+      if (error || !data) return null;
+      return data as Profile;
+    } catch (e) {
+      console.error('getProfileBySlug error:', e);
+      return null;
     }
-    let prof = this.profiles.find((p) => p.slug.toLowerCase() === cleanSlug);
-    if (!prof) {
-      await this.pullCloud();
-      prof = this.profiles.find((p) => p.slug.toLowerCase() === cleanSlug);
-    }
-    return prof ? { ...prof } : null;
   }
 
   async getAllProfiles(): Promise<Profile[]> {
-    await this.pullCloud();
-    return [...this.profiles];
+    const supabase = this.getSupabase();
+    if (!supabase) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+      return data as Profile[];
+    } catch (e) {
+      console.error('getAllProfiles error:', e);
+      return [];
+    }
   }
 
   async createProfile(data: Partial<Profile> & { full_name: string; user_id: string }): Promise<Profile> {
-    await this.pullCloud();
-    const id = `prof_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const supabase = this.getSupabase();
+    const id = data.id && data.id.includes('-') ? data.id : crypto.randomUUID();
     const baseSlug = slugify(data.slug || data.full_name);
     let uniqueSlug = baseSlug;
-    let counter = 1;
-    while (this.profiles.some((p) => p.slug === uniqueSlug)) {
-      uniqueSlug = `${baseSlug}-${counter++}`;
+
+    // Check slug collision in Supabase
+    if (supabase) {
+      try {
+        const { data: existing } = await supabase
+          .from('profiles')
+          .select('slug')
+          .ilike('slug', `${baseSlug}%`);
+
+        if (existing && existing.length > 0) {
+          uniqueSlug = `${baseSlug}-${existing.length + 1}`;
+        }
+      } catch {}
     }
 
     const newProfile: Profile = {
@@ -255,10 +161,9 @@ class TapCardDatabase {
       updated_at: new Date().toISOString(),
     };
 
-    // Automatically generate and link an active NFC TapCard card for this profile
     const cardCode = generateCardCode();
     const newCard: Card = {
-      id: `card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: crypto.randomUUID(),
       card_code: cardCode,
       profile_id: newProfile.id,
       user_id: newProfile.user_id,
@@ -272,70 +177,53 @@ class TapCardDatabase {
       updated_at: new Date().toISOString(),
     };
 
-    const supabase = this.getSupabase();
     if (supabase) {
       try {
-        const { data: dbProfile, error } = await supabase.from('profiles').insert(newProfile).select().single();
-        if (!error && dbProfile) {
+        const { data: dbProfile, error: profErr } = await supabase
+          .from('profiles')
+          .insert(newProfile)
+          .select()
+          .single();
+
+        if (profErr) {
+          console.error('Supabase profile insert error:', profErr);
+        } else {
           await supabase.from('cards').insert(newCard);
-          this.profiles.push(dbProfile as Profile);
-          this.cards.push(newCard);
           return dbProfile as Profile;
         }
       } catch (err) {
-        console.warn('Supabase profile create fallback:', err);
+        console.error('Supabase createProfile error:', err);
       }
     }
 
-    const existingIndex = this.profiles.findIndex((p) => p.user_id === data.user_id);
-    if (existingIndex !== -1) {
-      this.profiles[existingIndex] = newProfile;
-    } else {
-      this.profiles.push(newProfile);
-    }
-
-    this.cards.push(newCard);
-
-    this.pushCloud().catch(() => {});
-    return { ...newProfile };
+    return newProfile;
   }
 
   async updateProfile(id: string, updates: Partial<Profile>): Promise<Profile | null> {
     const supabase = this.getSupabase();
-    if (supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .update({ ...updates, updated_at: new Date().toISOString() })
-          .eq('id', id)
-          .select()
-          .single();
-        if (!error && data) {
-          const idx = this.profiles.findIndex((p) => p.id === id);
-          if (idx !== -1) this.profiles[idx] = data as Profile;
-          return data as Profile;
-        }
-      } catch {}
+    if (!supabase) return null;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error || !data) {
+        console.error('updateProfile error:', error);
+        return null;
+      }
+      return data as Profile;
+    } catch (e) {
+      console.error('updateProfile error:', e);
+      return null;
     }
-
-    await this.pullCloud();
-    const index = this.profiles.findIndex((p) => p.id === id);
-    if (index === -1) return null;
-
-    const existing = this.profiles[index];
-    const updated: Profile = {
-      ...existing,
-      ...updates,
-      updated_at: new Date().toISOString(),
-    };
-
-    this.profiles[index] = updated;
-    this.pushCloud().catch(() => {});
-    return { ...updated };
   }
 
   // -------------------------------------------------------------
-  // RESOLVE PUBLIC URL (Card Code or Slug)
+  // RESOLVE PUBLIC URL (Card Code or Slug) - Item 16 Physical Card Lifecycle
   // -------------------------------------------------------------
   async resolvePublicIdentifier(identifier: string): Promise<{
     profile: Profile | null;
@@ -344,136 +232,204 @@ class TapCardDatabase {
   }> {
     const cleanId = decodeURIComponent(identifier).trim();
     const supabase = this.getSupabase();
-    if (supabase) {
-      try {
-        // 1. Try card lookup in Supabase
-        const { data: card } = await supabase
-          .from('cards')
-          .select('*')
-          .ilike('card_code', cleanId)
-          .single();
-        if (card) {
-          if (card.status === 'REPLACED') return { profile: null, card, errorReason: 'CARD_REPLACED' };
-          if (card.status === 'SUSPENDED' || card.status === 'DISABLED' || card.status === 'LOST') return { profile: null, card, errorReason: 'CARD_INACTIVE' };
-          if (card.status === 'AVAILABLE' || !card.profile_id) return { profile: null, card, errorReason: 'CARD_UNASSIGNED' };
-          const { data: prof } = await supabase.from('profiles').select('*').eq('id', card.profile_id).single();
-          if (!prof || prof.status === 'DISABLED') return { profile: null, card, errorReason: 'PROFILE_INACTIVE' };
-          return { profile: prof, card };
+    if (!supabase) {
+      return { profile: null, card: null, errorReason: 'CARD_NOT_FOUND' };
+    }
+
+    try {
+      // 1. Try card lookup in Supabase
+      const { data: card } = await supabase
+        .from('cards')
+        .select('*')
+        .ilike('card_code', cleanId)
+        .single();
+
+      if (card) {
+        if (card.status === 'REPLACED') {
+          return { profile: null, card: card as Card, errorReason: 'CARD_REPLACED' };
+        }
+        if (card.status === 'SUSPENDED' || card.status === 'DISABLED' || card.status === 'LOST') {
+          return { profile: null, card: card as Card, errorReason: 'CARD_INACTIVE' };
+        }
+        if (card.status === 'AVAILABLE' || card.status === 'PROGRAMMING' || !card.profile_id) {
+          return { profile: null, card: card as Card, errorReason: 'CARD_UNASSIGNED' };
         }
 
-        // 2. Try profile slug lookup in Supabase
         const { data: prof } = await supabase
           .from('profiles')
           .select('*')
-          .ilike('slug', cleanId)
+          .eq('id', card.profile_id)
           .single();
-        if (prof) {
-          if (prof.status === 'DISABLED') return { profile: null, card: null, errorReason: 'PROFILE_INACTIVE' };
-          const { data: assignedCard } = await supabase
-            .from('cards')
-            .select('*')
-            .eq('profile_id', prof.id)
-            .eq('status', 'ACTIVE')
-            .limit(1)
-            .single();
-          return { profile: prof, card: assignedCard || null };
+
+        if (!prof || prof.status === 'DISABLED') {
+          return { profile: null, card: card as Card, errorReason: 'PROFILE_INACTIVE' };
         }
-      } catch {}
+
+        return { profile: prof as Profile, card: card as Card };
+      }
+
+      // 2. Try profile slug lookup in Supabase
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('slug', cleanId)
+        .single();
+
+      if (prof) {
+        if (prof.status === 'DISABLED') {
+          return { profile: null, card: null, errorReason: 'PROFILE_INACTIVE' };
+        }
+
+        const { data: assignedCard } = await supabase
+          .from('cards')
+          .select('*')
+          .eq('profile_id', prof.id)
+          .eq('status', 'ACTIVE')
+          .limit(1)
+          .single();
+
+        return { profile: prof as Profile, card: (assignedCard as Card) || null };
+      }
+
+      return { profile: null, card: null, errorReason: 'CARD_NOT_FOUND' };
+    } catch (e) {
+      console.error('resolvePublicIdentifier error:', e);
+      return { profile: null, card: null, errorReason: 'CARD_NOT_FOUND' };
     }
-
-    await this.pullCloud();
-
-    // 1. First check if it matches a card code (case-insensitive)
-    const card = this.cards.find(
-      (c) => c.card_code.toLowerCase() === cleanId.toLowerCase()
-    );
-
-    if (card) {
-      if (card.status === 'REPLACED') {
-        return { profile: null, card, errorReason: 'CARD_REPLACED' };
-      }
-      if (card.status === 'SUSPENDED' || card.status === 'DISABLED' || card.status === 'LOST') {
-        return { profile: null, card, errorReason: 'CARD_INACTIVE' };
-      }
-      if (card.status === 'AVAILABLE' || !card.profile_id) {
-        return { profile: null, card, errorReason: 'CARD_UNASSIGNED' };
-      }
-
-      // Card is assigned or active, lookup profile
-      const profile = await this.getProfileById(card.profile_id);
-      if (!profile || profile.status === 'DISABLED') {
-        return { profile: null, card, errorReason: 'PROFILE_INACTIVE' };
-      }
-
-      return { profile, card };
-    }
-
-    // 2. If no card matches, check profile slug
-    const profile = await this.getProfileBySlug(cleanId);
-    if (profile) {
-      if (profile.status === 'DISABLED') {
-        return { profile: null, card: null, errorReason: 'PROFILE_INACTIVE' };
-      }
-      // Check if user has an active card
-      const assignedCard = this.cards.find((c) => c.profile_id === profile.id && c.status === 'ACTIVE') || null;
-      return { profile, card: assignedCard };
-    }
-
-    return { profile: null, card: null, errorReason: 'CARD_NOT_FOUND' };
   }
 
   // -------------------------------------------------------------
   // CARDS MANAGEMENT
   // -------------------------------------------------------------
   async getCardById(id: string): Promise<Card | null> {
-    const card = this.cards.find((c) => c.id === id);
-    if (!card) return null;
-    const profile = card.profile_id ? await this.getProfileById(card.profile_id) : null;
-    return { ...card, profile };
+    const supabase = this.getSupabase();
+    if (!supabase) return null;
+
+    try {
+      const { data: card, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error || !card) return null;
+
+      if (card.profile_id) {
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', card.profile_id).single();
+        return { ...card, profile: prof || null } as Card;
+      }
+      return card as Card;
+    } catch (e) {
+      console.error('getCardById error:', e);
+      return null;
+    }
   }
 
   async getCardByCode(code: string): Promise<Card | null> {
-    const card = this.cards.find((c) => c.card_code.toLowerCase() === code.toLowerCase());
-    if (!card) return null;
-    const profile = card.profile_id ? await this.getProfileById(card.profile_id) : null;
-    return { ...card, profile };
+    const supabase = this.getSupabase();
+    if (!supabase) return null;
+
+    try {
+      const { data: card, error } = await supabase
+        .from('cards')
+        .select('*')
+        .ilike('card_code', code.trim())
+        .single();
+
+      if (error || !card) return null;
+
+      if (card.profile_id) {
+        const { data: prof } = await supabase.from('profiles').select('*').eq('id', card.profile_id).single();
+        return { ...card, profile: prof || null } as Card;
+      }
+      return card as Card;
+    } catch (e) {
+      console.error('getCardByCode error:', e);
+      return null;
+    }
   }
 
   async getCardsForProfile(profileId: string): Promise<Card[]> {
-    return this.cards.filter((c) => c.profile_id === profileId);
+    const supabase = this.getSupabase();
+    if (!supabase) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('profile_id', profileId);
+
+      if (error || !data) return [];
+      return data as Card[];
+    } catch (e) {
+      console.error('getCardsForProfile error:', e);
+      return [];
+    }
   }
 
   async getCardsForUser(userId: string): Promise<Card[]> {
-    return this.cards.filter((c) => c.user_id === userId);
+    const supabase = this.getSupabase();
+    if (!supabase) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('cards')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+      return data as Card[];
+    } catch (e) {
+      console.error('getCardsForUser error:', e);
+      return [];
+    }
   }
 
   async getAllCards(filter?: { status?: string; search?: string }): Promise<Card[]> {
-    let result = [...this.cards];
+    const supabase = this.getSupabase();
+    if (!supabase) return [];
 
-    if (filter?.status && filter.status !== 'ALL') {
-      result = result.filter((c) => c.status === filter.status);
+    try {
+      let query = supabase.from('cards').select('*').order('created_at', { ascending: false });
+
+      if (filter?.status && filter.status !== 'ALL') {
+        query = query.eq('status', filter.status);
+      }
+
+      if (filter?.search) {
+        query = query.or(`card_code.ilike.%${filter.search}%,card_type.ilike.%${filter.search}%`);
+      }
+
+      const { data: cards, error } = await query;
+      if (error || !cards) return [];
+
+      // Fetch profiles to populate details
+      const profileIds = cards.map((c) => c.profile_id).filter(Boolean);
+      let profilesMap: Record<string, Profile> = {};
+
+      if (profileIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('*').in('id', profileIds);
+        if (profs) {
+          profilesMap = Object.fromEntries(profs.map((p) => [p.id, p]));
+        }
+      }
+
+      return cards.map((c) => ({
+        ...c,
+        profile: c.profile_id ? profilesMap[c.profile_id] || null : null,
+      })) as Card[];
+    } catch (e) {
+      console.error('getAllCards error:', e);
+      return [];
     }
-
-    if (filter?.search) {
-      const q = filter.search.toLowerCase();
-      result = result.filter(
-        (c) =>
-          c.card_code.toLowerCase().includes(q) ||
-          c.card_type.toLowerCase().includes(q) ||
-          c.status.toLowerCase().includes(q)
-      );
-    }
-
-    // Populate profile details
-    return result.map((c) => {
-      const prof = c.profile_id ? this.profiles.find((p) => p.id === c.profile_id) : null;
-      return { ...c, profile: prof || null };
-    });
   }
 
   async createCard(data: Partial<Card> & { card_type?: CardType }): Promise<Card> {
+    const supabase = this.getSupabase();
     const cardCode = data.card_code || generateCardCode('TC');
-    const id = `card_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const id = data.id && data.id.includes('-') ? data.id : crypto.randomUUID();
+
     const newCard: Card = {
       id,
       card_code: cardCode,
@@ -489,104 +445,164 @@ class TapCardDatabase {
       updated_at: new Date().toISOString(),
     };
 
-    this.cards.push(newCard);
-    return { ...newCard };
+    if (supabase) {
+      try {
+        const { data: created, error } = await supabase.from('cards').insert(newCard).select().single();
+        if (!error && created) {
+          return created as Card;
+        }
+      } catch (e) {
+        console.error('createCard error:', e);
+      }
+    }
+
+    return newCard;
   }
 
   async bulkGenerateCards(count: number, cardType: CardType = 'matte_black'): Promise<Card[]> {
-    const generated: Card[] = [];
+    const cardsToInsert: Card[] = [];
     for (let i = 0; i < count; i++) {
-      const card = await this.createCard({ card_type: cardType, status: 'AVAILABLE' });
-      generated.push(card);
+      const cardCode = generateCardCode('TC');
+      const id = crypto.randomUUID();
+      cardsToInsert.push({
+        id,
+        card_code: cardCode,
+        profile_id: null,
+        user_id: null,
+        card_type: cardType,
+        design_template: 'corporate',
+        status: 'AVAILABLE',
+        short_url: getCardUrl(cardCode),
+        assigned_at: null,
+        activated_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
     }
-    return generated;
+
+    const supabase = this.getSupabase();
+    if (supabase) {
+      try {
+        const { data, error } = await supabase.from('cards').insert(cardsToInsert).select();
+        if (!error && data) {
+          return data as Card[];
+        }
+      } catch (e) {
+        console.error('bulkGenerateCards error:', e);
+      }
+    }
+
+    return cardsToInsert;
   }
 
   async assignCard(cardId: string, profileId: string, userId: string): Promise<Card | null> {
-    const index = this.cards.findIndex((c) => c.id === cardId);
-    if (index === -1) return null;
+    const supabase = this.getSupabase();
+    if (!supabase) return null;
 
-    this.cards[index] = {
-      ...this.cards[index],
-      profile_id: profileId,
-      user_id: userId,
-      status: 'ASSIGNED',
-      assigned_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const { data, error } = await supabase
+        .from('cards')
+        .update({
+          profile_id: profileId,
+          user_id: userId,
+          status: 'ASSIGNED',
+          assigned_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', cardId)
+        .select()
+        .single();
 
-    return { ...this.cards[index] };
+      if (error || !data) return null;
+      return data as Card;
+    } catch (e) {
+      console.error('assignCard error:', e);
+      return null;
+    }
   }
 
   async activateCard(cardId: string): Promise<Card | null> {
-    const index = this.cards.findIndex((c) => c.id === cardId);
-    if (index === -1) return null;
+    const supabase = this.getSupabase();
+    if (!supabase) return null;
 
-    const card = this.cards[index];
-    if (!card.profile_id) {
-      throw new Error('Card must be assigned to a profile before activation.');
+    try {
+      const { data, error } = await supabase
+        .from('cards')
+        .update({
+          status: 'ACTIVE',
+          activated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', cardId)
+        .select()
+        .single();
+
+      if (error || !data) return null;
+      return data as Card;
+    } catch (e) {
+      console.error('activateCard error:', e);
+      return null;
     }
-
-    this.cards[index] = {
-      ...card,
-      status: 'ACTIVE',
-      activated_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    return { ...this.cards[index] };
   }
 
   async updateCardStatus(cardId: string, status: CardStatus): Promise<Card | null> {
-    const index = this.cards.findIndex((c) => c.id === cardId);
-    if (index === -1) return null;
+    const supabase = this.getSupabase();
+    if (!supabase) return null;
 
-    this.cards[index] = {
-      ...this.cards[index],
-      status,
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const { data, error } = await supabase
+        .from('cards')
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', cardId)
+        .select()
+        .single();
 
-    return { ...this.cards[index] };
+      if (error || !data) return null;
+      return data as Card;
+    } catch (e) {
+      console.error('updateCardStatus error:', e);
+      return null;
+    }
   }
 
   async replaceCard(oldCardId: string, newCardId: string): Promise<{ oldCard: Card; newCard: Card }> {
-    const oldIndex = this.cards.findIndex((c) => c.id === oldCardId);
-    const newIndex = this.cards.findIndex((c) => c.id === newCardId);
+    const supabase = this.getSupabase();
+    if (!supabase) throw new Error('Database connection unavailable');
 
-    if (oldIndex === -1 || newIndex === -1) {
-      throw new Error('Invalid card IDs provided for replacement');
+    const { data: oldCard } = await supabase.from('cards').select('*').eq('id', oldCardId).single();
+    if (!oldCard || !oldCard.profile_id) {
+      throw new Error('Old card does not exist or has no assigned profile.');
     }
 
-    const oldCard = this.cards[oldIndex];
-    const profileId = oldCard.profile_id;
-    const userId = oldCard.user_id;
+    // 1. Mark old card as REPLACED (decommissioned)
+    const { data: updatedOld } = await supabase
+      .from('cards')
+      .update({ status: 'REPLACED', updated_at: new Date().toISOString() })
+      .eq('id', oldCardId)
+      .select()
+      .single();
 
-    if (!profileId) {
-      throw new Error('Old card does not have an assigned profile.');
-    }
-
-    // Disable old card
-    this.cards[oldIndex] = {
-      ...oldCard,
-      status: 'REPLACED',
-      updated_at: new Date().toISOString(),
-    };
-
-    // Activate new card pointing to the same profile
-    this.cards[newIndex] = {
-      ...this.cards[newIndex],
-      profile_id: profileId,
-      user_id: userId,
-      status: 'ACTIVE',
-      assigned_at: new Date().toISOString(),
-      activated_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    // 2. Transfer profile link to new card and activate it
+    const { data: updatedNew } = await supabase
+      .from('cards')
+      .update({
+        profile_id: oldCard.profile_id,
+        user_id: oldCard.user_id,
+        status: 'ACTIVE',
+        assigned_at: new Date().toISOString(),
+        activated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', newCardId)
+      .select()
+      .single();
 
     return {
-      oldCard: { ...this.cards[oldIndex] },
-      newCard: { ...this.cards[newIndex] },
+      oldCard: updatedOld as Card,
+      newCard: updatedNew as Card,
     };
   }
 
@@ -594,12 +610,22 @@ class TapCardDatabase {
   // LEADS
   // -------------------------------------------------------------
   async getLeads(profileId?: string): Promise<Lead[]> {
-    if (profileId) {
-      return this.leads
-        .filter((l) => l.profile_id === profileId)
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const supabase = this.getSupabase();
+    if (!supabase) return [];
+
+    try {
+      let query = supabase.from('leads').select('*').order('created_at', { ascending: false });
+      if (profileId) {
+        query = query.eq('profile_id', profileId);
+      }
+
+      const { data, error } = await query;
+      if (error || !data) return [];
+      return data as Lead[];
+    } catch (e) {
+      console.error('getLeads error:', e);
+      return [];
     }
-    return [...this.leads].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
   async createLead(data: {
@@ -611,7 +637,8 @@ class TapCardDatabase {
     message?: string | null;
     source: VisitSource;
   }): Promise<Lead> {
-    const id = `lead_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const supabase = this.getSupabase();
+    const id = crypto.randomUUID();
     const newLead: Lead = {
       id,
       profile_id: data.profile_id,
@@ -626,21 +653,41 @@ class TapCardDatabase {
       created_at: new Date().toISOString(),
     };
 
-    this.leads.unshift(newLead);
-    return { ...newLead };
+    if (supabase) {
+      try {
+        const { data: created, error } = await supabase.from('leads').insert(newLead).select().single();
+        if (!error && created) {
+          return created as Lead;
+        }
+      } catch (e) {
+        console.error('createLead error:', e);
+      }
+    }
+
+    return newLead;
   }
 
   async updateLeadStatus(id: string, status: LeadStatus, notes?: string): Promise<Lead | null> {
-    const index = this.leads.findIndex((l) => l.id === id);
-    if (index === -1) return null;
+    const supabase = this.getSupabase();
+    if (!supabase) return null;
 
-    this.leads[index] = {
-      ...this.leads[index],
-      status,
-      notes: notes !== undefined ? notes : this.leads[index].notes,
-    };
+    try {
+      const updateData: any = { status };
+      if (notes !== undefined) updateData.notes = notes;
 
-    return { ...this.leads[index] };
+      const { data, error } = await supabase
+        .from('leads')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error || !data) return null;
+      return data as Lead;
+    } catch (e) {
+      console.error('updateLeadStatus error:', e);
+      return null;
+    }
   }
 
   // -------------------------------------------------------------
@@ -654,7 +701,8 @@ class TapCardDatabase {
     session_id?: string;
     metadata?: Record<string, unknown>;
   }): Promise<AnalyticsEvent> {
-    const id = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const supabase = this.getSupabase();
+    const id = crypto.randomUUID();
     const newEvent: AnalyticsEvent = {
       id,
       profile_id: event.profile_id,
@@ -666,7 +714,14 @@ class TapCardDatabase {
       created_at: new Date().toISOString(),
     };
 
-    this.analytics.push(newEvent);
+    if (supabase) {
+      try {
+        await supabase.from('analytics_events').insert(newEvent);
+      } catch (e) {
+        console.error('recordAnalyticsEvent error:', e);
+      }
+    }
+
     return newEvent;
   }
 
@@ -682,40 +737,76 @@ class TapCardDatabase {
     totalLeads: number;
     conversionRate: number;
   }> {
-    const events = profileId
-      ? this.analytics.filter((e) => e.profile_id === profileId)
-      : this.analytics;
+    const supabase = this.getSupabase();
+    if (!supabase) {
+      return {
+        totalViews: 0,
+        nfcTaps: 0,
+        qrScans: 0,
+        directVisits: 0,
+        ctaClicks: 0,
+        whatsappClicks: 0,
+        callClicks: 0,
+        contactDownloads: 0,
+        totalLeads: 0,
+        conversionRate: 0,
+      };
+    }
 
-    const leadsCount = profileId
-      ? this.leads.filter((l) => l.profile_id === profileId).length
-      : this.leads.length;
+    try {
+      let eventsQuery = supabase.from('analytics_events').select('event_type, source');
+      let leadsQuery = supabase.from('leads').select('id', { count: 'exact', head: true });
 
-    const totalViews = events.filter((e) => e.event_type === 'profile_view').length;
-    const nfcTaps = events.filter((e) => e.event_type === 'nfc_visit' || e.source === 'nfc').length;
-    const qrScans = events.filter((e) => e.event_type === 'qr_visit' || e.source === 'qr').length;
-    const directVisits = events.filter((e) => e.source === 'direct' && e.event_type === 'profile_view').length;
+      if (profileId) {
+        eventsQuery = eventsQuery.eq('profile_id', profileId);
+        leadsQuery = leadsQuery.eq('profile_id', profileId);
+      }
 
-    const whatsappClicks = events.filter((e) => e.event_type === 'whatsapp_click').length;
-    const callClicks = events.filter((e) => e.event_type === 'call_click').length;
-    const contactDownloads = events.filter((e) => e.event_type === 'contact_download').length;
-    const ctaClicks = events.filter((e) =>
-      ['whatsapp_click', 'call_click', 'email_click', 'website_click', 'contact_download', 'linkedin_click'].includes(e.event_type)
-    ).length;
+      const [{ data: events }, { count: totalLeads }] = await Promise.all([eventsQuery, leadsQuery]);
+      const eventList = events || [];
 
-    const conversionRate = totalViews > 0 ? Number(((leadsCount / totalViews) * 100).toFixed(1)) : 0;
+      const totalViews = eventList.filter((e) => e.event_type === 'profile_view').length;
+      const nfcTaps = eventList.filter((e) => e.event_type === 'nfc_visit' || e.source === 'nfc').length;
+      const qrScans = eventList.filter((e) => e.event_type === 'qr_visit' || e.source === 'qr').length;
+      const directVisits = eventList.filter((e) => e.source === 'direct' && e.event_type === 'profile_view').length;
 
-    return {
-      totalViews,
-      nfcTaps,
-      qrScans,
-      directVisits,
-      ctaClicks,
-      whatsappClicks,
-      callClicks,
-      contactDownloads,
-      totalLeads: leadsCount,
-      conversionRate,
-    };
+      const whatsappClicks = eventList.filter((e) => e.event_type === 'whatsapp_click').length;
+      const callClicks = eventList.filter((e) => e.event_type === 'call_click').length;
+      const contactDownloads = eventList.filter((e) => e.event_type === 'contact_download').length;
+      const ctaClicks = eventList.filter((e) =>
+        ['whatsapp_click', 'call_click', 'email_click', 'website_click', 'contact_download', 'linkedin_click'].includes(e.event_type)
+      ).length;
+
+      const leadsCount = totalLeads || 0;
+      const conversionRate = totalViews > 0 ? Number(((leadsCount / totalViews) * 100).toFixed(1)) : 0;
+
+      return {
+        totalViews,
+        nfcTaps,
+        qrScans,
+        directVisits,
+        ctaClicks,
+        whatsappClicks,
+        callClicks,
+        contactDownloads,
+        totalLeads: leadsCount,
+        conversionRate,
+      };
+    } catch (e) {
+      console.error('getAnalyticsSummary error:', e);
+      return {
+        totalViews: 0,
+        nfcTaps: 0,
+        qrScans: 0,
+        directVisits: 0,
+        ctaClicks: 0,
+        whatsappClicks: 0,
+        callClicks: 0,
+        contactDownloads: 0,
+        totalLeads: 0,
+        conversionRate: 0,
+      };
+    }
   }
 
   async getAnalyticsDailyTimeline(profileId?: string, days: number = 7): Promise<Array<{
@@ -725,45 +816,94 @@ class TapCardDatabase {
     qr: number;
     leads: number;
   }>> {
+    const supabase = this.getSupabase();
     const result: Array<{ date: string; views: number; nfc: number; qr: number; leads: number }> = [];
     const now = new Date();
 
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+    if (!supabase) return result;
 
-      const dayEvents = this.analytics.filter((e) => {
-        const matchesProfile = !profileId || e.profile_id === profileId;
-        return matchesProfile && e.created_at.startsWith(dateStr);
-      });
+    try {
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - days);
+      const startIso = startDate.toISOString();
 
-      const dayLeads = this.leads.filter((l) => {
-        const matchesProfile = !profileId || l.profile_id === profileId;
-        return matchesProfile && l.created_at.startsWith(dateStr);
-      });
+      let eventsQuery = supabase
+        .from('analytics_events')
+        .select('event_type, source, created_at')
+        .gte('created_at', startIso);
 
-      result.push({
-        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        views: dayEvents.filter((e) => e.event_type === 'profile_view').length,
-        nfc: dayEvents.filter((e) => e.source === 'nfc').length,
-        qr: dayEvents.filter((e) => e.source === 'qr').length,
-        leads: dayLeads.length,
-      });
+      let leadsQuery = supabase
+        .from('leads')
+        .select('created_at')
+        .gte('created_at', startIso);
+
+      if (profileId) {
+        eventsQuery = eventsQuery.eq('profile_id', profileId);
+        leadsQuery = leadsQuery.eq('profile_id', profileId);
+      }
+
+      const [{ data: events }, { data: leads }] = await Promise.all([eventsQuery, leadsQuery]);
+      const eventList = events || [];
+      const leadList = leads || [];
+
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+
+        const dayEvents = eventList.filter((e) => e.created_at.startsWith(dateStr));
+        const dayLeads = leadList.filter((l) => l.created_at.startsWith(dateStr));
+
+        result.push({
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          views: dayEvents.filter((e) => e.event_type === 'profile_view').length,
+          nfc: dayEvents.filter((e) => e.source === 'nfc').length,
+          qr: dayEvents.filter((e) => e.source === 'qr').length,
+          leads: dayLeads.length,
+        });
+      }
+
+      return result;
+    } catch (e) {
+      console.error('getAnalyticsDailyTimeline error:', e);
+      return result;
     }
-
-    return result;
   }
 
   // -------------------------------------------------------------
   // ORDERS
   // -------------------------------------------------------------
   async getOrders(userId?: string): Promise<Order[]> {
-    let list = [...this.orders];
-    if (userId) {
-      list = list.filter((o) => o.user_id === userId);
+    const supabase = this.getSupabase();
+    if (!supabase) return [];
+
+    try {
+      let query = supabase.from('orders').select('*').order('created_at', { ascending: false });
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query;
+      if (error || !data) return [];
+      return data as Order[];
+    } catch (e) {
+      console.error('getOrders error:', e);
+      return [];
     }
-    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  async getOrderById(id: string): Promise<Order | null> {
+    const supabase = this.getSupabase();
+    if (!supabase) return null;
+
+    try {
+      const { data, error } = await supabase.from('orders').select('*').eq('id', id).single();
+      if (error || !data) return null;
+      return data as Order;
+    } catch (e) {
+      console.error('getOrderById error:', e);
+      return null;
+    }
   }
 
   async createOrder(data: {
@@ -771,7 +911,7 @@ class TapCardDatabase {
     profile_id?: string | null;
     quantity: number;
     card_type: CardType;
-    design: Card['design_template'];
+    design?: string;
     amount: number;
     shipping_name: string;
     shipping_phone: string;
@@ -780,8 +920,9 @@ class TapCardDatabase {
     shipping_state: string;
     shipping_pincode: string;
   }): Promise<Order> {
-    const orderNumber = `TC-ORD-${Math.floor(10000 + Math.random() * 90000)}`;
-    const id = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const supabase = this.getSupabase();
+    const orderNumber = `TC-ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const id = crypto.randomUUID();
 
     const newOrder: Order = {
       id,
@@ -789,9 +930,9 @@ class TapCardDatabase {
       user_id: data.user_id,
       profile_id: data.profile_id || null,
       card_id: null,
-      quantity: data.quantity || 1,
+      quantity: data.quantity,
       card_type: data.card_type,
-      design: data.design,
+      design: (data.design as any) || 'corporate',
       amount: data.amount,
       currency: 'INR',
       payment_status: 'PENDING',
@@ -808,47 +949,65 @@ class TapCardDatabase {
       updated_at: new Date().toISOString(),
     };
 
-    this.orders.unshift(newOrder);
-    return { ...newOrder };
+    if (supabase) {
+      try {
+        const { data: created, error } = await supabase.from('orders').insert(newOrder).select().single();
+        if (!error && created) {
+          return created as Order;
+        }
+      } catch (e) {
+        console.error('createOrder error:', e);
+      }
+    }
+
+    return newOrder;
   }
 
   async updateOrderStatus(
     orderId: string,
-    status: OrderStatus,
+    orderStatus: OrderStatus,
     paymentStatus?: OrderPaymentStatus,
     trackingNumber?: string
   ): Promise<Order | null> {
-    const index = this.orders.findIndex((o) => o.id === orderId);
-    if (index === -1) return null;
+    const supabase = this.getSupabase();
+    if (!supabase) return null;
 
-    this.orders[index] = {
-      ...this.orders[index],
-      order_status: status,
-      payment_status: paymentStatus || this.orders[index].payment_status,
-      tracking_number: trackingNumber || this.orders[index].tracking_number,
-      updated_at: new Date().toISOString(),
-    };
+    try {
+      const updateData: any = {
+        order_status: orderStatus,
+        updated_at: new Date().toISOString(),
+      };
+      if (paymentStatus) updateData.payment_status = paymentStatus;
+      if (trackingNumber !== undefined) updateData.tracking_number = trackingNumber;
 
-    return { ...this.orders[index] };
+      const { data, error } = await supabase
+        .from('orders')
+        .update(updateData)
+        .eq('id', orderId)
+        .select()
+        .single();
+
+      if (error || !data) return null;
+      return data as Order;
+    } catch (e) {
+      console.error('updateOrderStatus error:', e);
+      return null;
+    }
   }
 
   // -------------------------------------------------------------
-  // APP SETTINGS & PRICING
+  // SETTINGS & PRICING
   // -------------------------------------------------------------
   async getPlans(): Promise<AppPlan[]> {
-    return [...this.plans];
+    return this.plans;
   }
 
-  async updatePlan(id: string, updates: Partial<AppPlan>): Promise<AppPlan | null> {
-    const index = this.plans.findIndex((p) => p.id === id);
+  async updatePlan(planId: string, updates: Partial<AppPlan>): Promise<AppPlan | null> {
+    const index = this.plans.findIndex((p) => p.id === planId);
     if (index === -1) return null;
     this.plans[index] = { ...this.plans[index], ...updates };
-    return { ...this.plans[index] };
+    return this.plans[index];
   }
 }
 
-// Global singleton instance
-const globalForRepo = global as unknown as { tapCardRepo: TapCardDatabase };
-export const repo = globalForRepo.tapCardRepo || new TapCardDatabase();
-if (process.env.NODE_ENV !== 'production') globalForRepo.tapCardRepo = repo;
-
+export const repo = new TapCardDatabase();

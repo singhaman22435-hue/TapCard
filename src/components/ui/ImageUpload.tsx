@@ -68,10 +68,37 @@ export function ImageUpload({
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Convert to optimized JPEG data URL
-        const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        onChange(optimizedDataUrl);
-        setIsProcessing(false);
+        // Upload optimized image to Supabase Storage via /api/upload
+        canvas.toBlob(async (blob) => {
+          const fallbackDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          if (!blob) {
+            onChange(fallbackDataUrl);
+            setIsProcessing(false);
+            return;
+          }
+
+          try {
+            const formData = new FormData();
+            formData.append('file', blob, `${Date.now()}.jpg`);
+            const res = await fetch('/api/upload', {
+              method: 'POST',
+              body: formData,
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.url) {
+                onChange(data.url);
+                setIsProcessing(false);
+                return;
+              }
+            }
+          } catch (uploadErr) {
+            console.warn('Storage upload fallback to base64:', uploadErr);
+          }
+
+          onChange(fallbackDataUrl);
+          setIsProcessing(false);
+        }, 'image/jpeg', 0.85);
       };
 
       img.onerror = () => {

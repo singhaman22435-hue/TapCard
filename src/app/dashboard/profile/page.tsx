@@ -169,13 +169,6 @@ export default function ProfileEditorPage() {
         throw new Error(data.error || 'Failed to save profile changes.');
       }
 
-      if (data.profile) {
-        try {
-          localStorage.setItem('tapcard_user_profile', JSON.stringify(data.profile));
-          document.cookie = `tapcard_profile=${encodeURIComponent(JSON.stringify(data.profile))}; path=/; max-age=31536000; SameSite=Lax`;
-        } catch {}
-      }
-
       await refreshProfile();
       setSuccessMessage('Profile saved successfully! Your NFC card and QR link update in real time.');
       setTimeout(() => setSuccessMessage(''), 4000);

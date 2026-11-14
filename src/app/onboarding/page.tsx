@@ -120,13 +120,6 @@ export default function OnboardingPage() {
         throw new Error(data.error || 'Failed to initialize profile.');
       }
 
-      if (data.profile) {
-        try {
-          localStorage.setItem('tapcard_user_profile', JSON.stringify(data.profile));
-          document.cookie = `tapcard_profile=${encodeURIComponent(JSON.stringify(data.profile))}; path=/; max-age=31536000; SameSite=Lax`;
-        } catch {}
-      }
-
       await refreshProfile();
       router.push('/dashboard');
     } catch (err: any) {

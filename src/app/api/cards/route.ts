@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { repo } from '@/lib/db/repository';
+import { getAuthenticatedUser } from '@/lib/auth/server-auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || undefined;
     const search = searchParams.get('search') || undefined;
 
+    // Public lookup of individual card by code or id is permitted for NFC resolving
     if (code) {
       const card = await repo.getCardByCode(code);
       return NextResponse.json({ card });
@@ -21,17 +23,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ card });
     }
 
+    const { user, isAdmin } = await getAuthenticatedUser();
+
+    // Authenticated users can fetch their own cards
+    if (userId) {
+      if (!user || (user.id !== userId && !isAdmin)) {
+        return NextResponse.json({ error: 'Unauthorized: Cannot view another user cards' }, { status: 403 });
+      }
+      const cards = await repo.getCardsForUser(userId);
+      return NextResponse.json({ cards });
+    }
+
     if (profileId) {
       const cards = await repo.getCardsForProfile(profileId);
       return NextResponse.json({ cards });
     }
 
-    if (userId) {
-      const cards = await repo.getCardsForUser(userId);
-      return NextResponse.json({ cards });
+    // Browsing/listing all cards is an administrative action
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Administrative authorization required' }, { status: 403 });
     }
 
-    const cards = await repo.getAllCards({ status, search });
+    const cards = await repo.getAllCards({ status: status as any, search });
     return NextResponse.json({ cards });
   } catch (error: any) {
     console.error('API Cards GET Error:', error);
@@ -41,6 +54,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const { isAdmin } = await getAuthenticatedUser();
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Only administrators can create or bulk-generate cards' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { action, count, cardType, ...cardData } = body;
 
@@ -60,22 +78,41 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const { user, isAdmin } = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { action, cardId, profileId, userId, status, oldCardId, newCardId } = body;
+
+    // Card activation by authenticated owner
+    if (action === 'activate') {
+      if (!cardId) {
+        return NextResponse.json({ error: 'cardId is required' }, { status: 400 });
+      }
+      const existing = await repo.getCardById(cardId);
+      if (!existing) {
+        return NextResponse.json({ error: 'Card not found' }, { status: 404 });
+      }
+      if (existing.user_id && existing.user_id !== user.id && !isAdmin) {
+        return NextResponse.json({ error: 'Forbidden: Cannot activate card assigned to another user' }, { status: 403 });
+      }
+
+      const updated = await repo.activateCard(cardId);
+      return NextResponse.json({ card: updated });
+    }
+
+    // Administrative operations (assign, replace, status update)
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Forbidden: Administrative access required for card management' }, { status: 403 });
+    }
 
     if (action === 'assign') {
       if (!cardId || !profileId || !userId) {
         return NextResponse.json({ error: 'cardId, profileId, and userId are required' }, { status: 400 });
       }
       const updated = await repo.assignCard(cardId, profileId, userId);
-      return NextResponse.json({ card: updated });
-    }
-
-    if (action === 'activate') {
-      if (!cardId) {
-        return NextResponse.json({ error: 'cardId is required' }, { status: 400 });
-      }
-      const updated = await repo.activateCard(cardId);
       return NextResponse.json({ card: updated });
     }
 
@@ -101,4 +138,3 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'Failed to update card' }, { status: 500 });
   }
 }
-
