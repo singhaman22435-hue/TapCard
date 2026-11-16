@@ -186,3 +186,33 @@ CREATE POLICY "Public read storage" ON storage.objects FOR SELECT TO public USIN
 
 DROP POLICY IF EXISTS "Public upload storage" ON storage.objects;
 CREATE POLICY "Public upload storage" ON storage.objects FOR INSERT TO public WITH CHECK (bucket_id = 'tapcard-assets');
+
+-- ------------------------------------------------------------------------------
+-- 9. SAFE TEXT COLUMN MIGRATION & FOREIGN KEY RELAXATION
+-- ------------------------------------------------------------------------------
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_user_id_fkey;
+ALTER TABLE public.cards DROP CONSTRAINT IF EXISTS cards_profile_id_fkey;
+ALTER TABLE public.cards DROP CONSTRAINT IF EXISTS cards_user_id_fkey;
+ALTER TABLE public.leads DROP CONSTRAINT IF EXISTS leads_profile_id_fkey;
+ALTER TABLE public.leads DROP CONSTRAINT IF EXISTS leads_card_id_fkey;
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_user_id_fkey;
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_profile_id_fkey;
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_card_id_fkey;
+ALTER TABLE public.analytics_events DROP CONSTRAINT IF EXISTS analytics_events_profile_id_fkey;
+ALTER TABLE public.analytics_events DROP CONSTRAINT IF EXISTS analytics_events_card_id_fkey;
+
+ALTER TABLE public.profiles ALTER COLUMN id TYPE TEXT;
+ALTER TABLE public.profiles ALTER COLUMN user_id TYPE TEXT;
+ALTER TABLE public.cards ALTER COLUMN id TYPE TEXT;
+ALTER TABLE public.cards ALTER COLUMN profile_id TYPE TEXT;
+ALTER TABLE public.cards ALTER COLUMN user_id TYPE TEXT;
+ALTER TABLE public.leads ALTER COLUMN id TYPE TEXT;
+ALTER TABLE public.leads ALTER COLUMN profile_id TYPE TEXT;
+ALTER TABLE public.leads ALTER COLUMN card_id TYPE TEXT;
+ALTER TABLE public.orders ALTER COLUMN id TYPE TEXT;
+ALTER TABLE public.orders ALTER COLUMN user_id TYPE TEXT;
+ALTER TABLE public.orders ALTER COLUMN profile_id TYPE TEXT;
+ALTER TABLE public.orders ALTER COLUMN card_id TYPE TEXT;
+ALTER TABLE public.analytics_events ALTER COLUMN id TYPE TEXT;
+ALTER TABLE public.analytics_events ALTER COLUMN profile_id TYPE TEXT;
+ALTER TABLE public.analytics_events ALTER COLUMN card_id TYPE TEXT;
